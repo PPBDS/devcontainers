@@ -41,7 +41,7 @@ Audience: David, collaborators, contributors editing PPBDS package source code.
 
 Contents (in addition to `base`):
 
-- `devtools`, `pkgdown`, `roxygen2`, `testthat`, `usethis`, `renv`
+- `devtools`, `pkgdown`, `roxygen2`, `testthat`, `usethis`
 - R CMD check toolchain (`qpdf`, plus what's already in rocker/tidyverse)
 - Build tools and headers for compiling packages from source
 
@@ -64,10 +64,10 @@ Does NOT include:
 
 - Package development tooling (devtools, pkgdown, R CMD check deps) — students don't need it and it slows the image
 - Source-builds of PPBDS packages — students get binary releases from r-universe
-- VS Code settings/extensions (font, theme, `vscode-r-tutorials`) — those live in `student-template`'s `devcontainer.json`, not in this image, so the image stays editor-agnostic
-- A workaround for the Codespace `GITHUB_TOKEN` scoping behavior. The default token is repo-scoped by design; students who need to push elsewhere run `gh auth login` once per Codespace. Documented in `student-template`'s README, not patched in the image.
+- VS Code settings/extensions (font, theme, `vscode-r-tutorials`) — those live in `codespace-starter`'s `devcontainer.json`, not in this image, so the image stays editor-agnostic
+- A workaround for the Codespace `GITHUB_TOKEN` scoping behavior. The default token is repo-scoped by design; students who need to push elsewhere run `gh auth login` once per Codespace. Documented in `codespace-starter`'s README, not patched in the image.
 
-The `student` image is consumed by `PPBDS/student-template` (formerly `PPBDS/codespace-starter`), which is the GitHub template repository students click "Use this template" on to seed their own repo for the class.
+The `student` image is consumed by `PPBDS/codespace-starter`, the GitHub template repository students click "Use this template" on to seed their own repo for the class.
 
 ## Tagging and versioning
 
@@ -75,11 +75,11 @@ Each image is published with these tag families:
 
 - `:latest` — most recent successful build from `main`. Convenient for development; not stable.
 - `:X.Y.Z` and `:X.Y` — semver tags derived from a GitHub release on this repo. The canonical stable pin.
-- `:<semester>` — for the `student` image only: a moving channel like `:fa25`, `:sp26` that points at the semver release blessed for that semester. Lets us patch security fixes within a semester without forcing a manual bump in `student-template`. Applied manually by retagging a tested release; the build workflow does not produce these automatically.
+- `:<semester>` — for the `student` image only: a moving channel like `:fa25`, `:sp26` that points at the semver release blessed for that semester. Lets us patch security fixes within a semester without forcing a manual bump in `codespace-starter`. Applied manually by retagging a tested release; the build workflow does not produce these automatically.
 
 Pin policy:
 
-- `student-template` pins to `:<semester>` and we update that tag deliberately.
+- `codespace-starter` pins to `:<semester>` and we update that tag deliberately.
 - PPBDS package repos may pin to `:latest` for `dev` (David's call) or to a semver tag if they want stability.
 
 The R version is encoded in `base`'s FROM line. We do not publish a separate `:r-4.4`-style tag.
@@ -99,9 +99,9 @@ When changing the base image, expect both `dev` and `student` to rebuild. Verify
 
 - **PPBDS package repos** (tutorial.helpers, positron.tutorials, primer, ai.tutorials, vscode-r-tutorials, others): each contains a `.devcontainer/devcontainer.json` of roughly five lines, referencing `ghcr.io/ppbds/devcontainers/dev:<tag>`. Per-repo customization (extra VS Code extensions, postCreate hooks specific to that package) goes in that file, not in the dev image.
 
-- **`PPBDS/student-template`** (the renamed `codespace-starter`): a GitHub template repository. Its `.devcontainer/devcontainer.json` references `ghcr.io/ppbds/devcontainers/student:<semester-tag>`. Students click "Use this template" to create their own repo, then launch a Codespace from it.
+- **`PPBDS/codespace-starter`**: a GitHub template repository. Its `.devcontainer/devcontainer.json` references `ghcr.io/ppbds/devcontainers/student:<semester-tag>`. Students click "Use this template" to create their own repo, then launch a Codespace from it.
 
-Do not put student-facing content (problem sets, tutorial seed files, README instructions for students) in *this* repo. That belongs in `student-template`. This repo only builds the image the template references.
+Do not put student-facing content (problem sets, tutorial seed files, README instructions for students) in *this* repo. That belongs in `codespace-starter`. This repo only builds the image the template references.
 
 ## Coding and style conventions
 
@@ -114,6 +114,6 @@ Do not put student-facing content (problem sets, tutorial seed files, README ins
 ## What this repo is not
 
 - Not a place for application code, R packages, or course content.
-- Not a template repo. Students do not fork or "Use this template" on this repo. They use `PPBDS/student-template`.
+- Not a template repo. Students do not fork or "Use this template" on this repo. They use `PPBDS/codespace-starter`.
 - Not a Feature registry. If we later want to publish reusable devcontainer Features, that goes in a separate repo (`PPBDS/devcontainer-features` or similar).
 - Not coupled to GitHub Codespaces specifically. The images should work in any devcontainer-compatible environment (VS Code locally with Docker, JetBrains, GitPod). Avoid Codespaces-only assumptions in the Dockerfiles.

@@ -20,6 +20,5 @@ RUN R -q -e 'pak::pkg_install(c( \
         "pkgdown", \
         "roxygen2", \
         "testthat", \
-        "usethis", \
-        "renv" \
+        "usethis" \
     ))'
