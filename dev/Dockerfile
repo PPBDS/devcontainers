@@ -21,4 +21,8 @@ RUN R -q -e 'pak::pkg_install(c( \
         "roxygen2", \
         "testthat", \
         "usethis" \
-    ))'
+    ), upgrade = TRUE)'
+
+# Restore group-write on site-library (the install above ran as root).
+# See base/Dockerfile for rationale.
+RUN chmod -R g+w /usr/local/lib/R/site-library

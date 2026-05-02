@@ -13,4 +13,8 @@ RUN R -q -e 'options(repos = c( \
         PPBDS = "https://ppbds.r-universe.dev", \
         getOption("repos") \
     )); \
-    pak::pkg_install("tutorial.helpers")'
+    pak::pkg_install("tutorial.helpers", upgrade = TRUE)'
+
+# Restore group-write on site-library (the install above ran as root).
+# See base/Dockerfile for rationale.
+RUN chmod -R g+w /usr/local/lib/R/site-library

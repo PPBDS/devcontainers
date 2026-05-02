@@ -55,7 +55,11 @@ USER root
 RUN R -q -e 'install.packages("pak", repos = sprintf("https://r-lib.github.io/p/pak/stable/%s/%s/%s", .Platform$pkgType, R.Version()$os, R.Version()$arch))'
 
 # httpgd: graphics device used by both dev and student VS Code R extensions.
-RUN R -q -e 'pak::pkg_install("httpgd")'
+# upgrade = TRUE forces pak to pull the latest version of every dependency
+# (not just "whatever already satisfies the minimum"). Without this, a
+# binary package built against a newer dependency than what rocker shipped
+# can fail to load with "object 'X' is not exported by 'namespace:Y'".
+RUN R -q -e 'pak::pkg_install("httpgd", upgrade = TRUE)'
 
 # Headless-container workarounds: any consumer (Codespaces, local Docker,
 # JetBrains Gateway) lacks a desktop, so anything that tries to open a
@@ -63,5 +67,12 @@ RUN R -q -e 'pak::pkg_install("httpgd")'
 RUN printf '#!/bin/sh\nexit 0\n' > /usr/local/bin/xdg-open \
     && chmod +x /usr/local/bin/xdg-open
 ENV BROWSER=/usr/bin/true
+
+# All R installs above ran as root, so the resulting package dirs are
+# root-owned with group-read-only permissions. Restore rocker's convention
+# of group-writable site-library so the runtime user (rstudio, in staff
+# group) can install/update packages — and so package-load paths that
+# touch lock files or caches don't trip permission errors.
+RUN chmod -R g+w /usr/local/lib/R/site-library
 
 # Locale (en_US.UTF-8) and timezone (Etc/UTC) are inherited from the rocker base.
