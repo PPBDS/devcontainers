@@ -50,6 +50,11 @@ RUN curl --proto '=https' --tlsv1.2 -fsSL \
         "https://github.com/eitsupi/arf/releases/download/v${ARF_VERSION}/arf-console-installer.sh" | sh
 USER root
 
+# Symlink arf to a stable system path so consumer devcontainer.json files
+# don't have to hard-code "/home/rstudio/...". If the image's default user
+# ever changes, only base/Dockerfile needs updating, not every consumer.
+RUN ln -s /home/rstudio/.cargo/bin/arf /usr/local/bin/arf
+
 # pak: fast parallel R package installer. Used by both downstream images,
 # so install once at the base layer.
 RUN R -q -e 'install.packages("pak", repos = sprintf("https://r-lib.github.io/p/pak/stable/%s/%s/%s", .Platform$pkgType, R.Version()$os, R.Version()$arch))'
@@ -74,5 +79,10 @@ ENV BROWSER=/usr/bin/true
 # group) can install/update packages — and so package-load paths that
 # touch lock files or caches don't trip permission errors.
 RUN chmod -R g+w /usr/local/lib/R/site-library
+
+# Smoke test: every package baked in must actually load. Catches binary-ABI
+# mismatches at build time instead of at Codespace-launch time.
+# --vanilla skips Rprofile so this isolates the package-load path itself.
+RUN R --vanilla -e 'for (p in c("pak", "httpgd")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)'
 
 # Locale (en_US.UTF-8) and timezone (Etc/UTC) are inherited from the rocker base.

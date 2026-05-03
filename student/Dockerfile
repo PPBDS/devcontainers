@@ -18,3 +18,8 @@ RUN R -q -e 'options(repos = c( \
 # Restore group-write on site-library (the install above ran as root).
 # See base/Dockerfile for rationale.
 RUN chmod -R g+w /usr/local/lib/R/site-library
+
+# Smoke test: tutorial.helpers and the learnr/knitr/rmarkdown chain must
+# all load. The original learnr/xfun ABI mismatch failure would have been
+# caught here at build time.
+RUN R --vanilla -e 'for (p in c("tutorial.helpers", "learnr", "knitr", "rmarkdown")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)'

@@ -42,8 +42,7 @@ Audience: David, collaborators, contributors editing PPBDS package source code.
 Contents (in addition to `base`):
 
 - `devtools`, `pkgdown`, `roxygen2`, `testthat`, `usethis`
-- R CMD check toolchain (`qpdf`, plus what's already in rocker/tidyverse)
-- Build tools and headers for compiling packages from source
+- R CMD check toolchain (`qpdf`, plus the build/check tools already in rocker/tidyverse)
 
 Does NOT include:
 
@@ -95,9 +94,11 @@ Builds run on Ubuntu; downstream consumers may run the resulting images on Linux
 
 When changing the base image, expect both `dev` and `student` to rebuild. Verify both still work before tagging a release.
 
+Each Dockerfile ends with a smoke test (`R --vanilla -e 'requireNamespace(...)'` over its baked-in packages). The build fails if any package can't load. This catches binary-ABI mismatches (the `learnr`/`xfun` failure mode that bit us during initial build-out) at build time rather than letting them surface as a Codespace launch failure. Keep the smoke tests up to date when adding or removing packages.
+
 ## Relationship to other PPBDS repos
 
-- **PPBDS package repos** (tutorial.helpers, positron.tutorials, primer, ai.tutorials, vscode-r-tutorials, others): each contains a `.devcontainer/devcontainer.json` of roughly five lines, referencing `ghcr.io/ppbds/devcontainers/dev:<tag>`. Per-repo customization (extra VS Code extensions, postCreate hooks specific to that package) goes in that file, not in the dev image.
+- **PPBDS package repos** (tutorial.helpers, positron.tutorials, primer, ai.tutorials, etc.): each *should* contain a `.devcontainer/devcontainer.json` of roughly five lines, referencing `ghcr.io/ppbds/devcontainers/dev:<tag>`. Per-repo customization (extra VS Code extensions, postCreate hooks specific to that package) goes in that file, not in the dev image. Migration to this image is in progress; not all repos have switched yet. (Note: `PPBDS/vscode-r-tutorials` is a TypeScript VS Code extension repo, not an R package — it has different devcontainer needs and is not a consumer of `dev`.)
 
 - **`PPBDS/codespace-starter`**: a GitHub template repository. Its `.devcontainer/devcontainer.json` references `ghcr.io/ppbds/devcontainers/student:<semester-tag>`. Students click "Use this template" to create their own repo, then launch a Codespace from it.
 
