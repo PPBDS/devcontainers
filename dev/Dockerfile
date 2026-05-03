@@ -12,16 +12,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         qpdf \
     && rm -rf /var/lib/apt/lists/*
 
-# Package-development R packages. pak comes from base. upgrade = TRUE
-# pulls latest versions of all transitive deps to avoid binary-ABI
-# mismatches — see base/Dockerfile for the failure mode.
+# Package-development R packages. pak comes from base. No `upgrade = TRUE`
+# here — these packages have stable, well-behaved binary builds in P3M and
+# haven't shown the ABI-mismatch failure mode in practice. The smoke test
+# at the bottom of this Dockerfile fails the build if that ever changes.
 RUN R -q -e 'pak::pkg_install(c( \
         "devtools", \
         "pkgdown", \
         "roxygen2", \
         "testthat", \
         "usethis" \
-    ), upgrade = TRUE)'
+    ))'
 
 # Restore group-write on site-library (the install above ran as root).
 # See base/Dockerfile for rationale.

@@ -60,11 +60,12 @@ RUN ln -s /home/rstudio/.cargo/bin/arf /usr/local/bin/arf
 RUN R -q -e 'install.packages("pak", repos = sprintf("https://r-lib.github.io/p/pak/stable/%s/%s/%s", .Platform$pkgType, R.Version()$os, R.Version()$arch))'
 
 # httpgd: graphics device used by both dev and student VS Code R extensions.
-# upgrade = TRUE forces pak to pull the latest version of every dependency
-# (not just "whatever already satisfies the minimum"). Without this, a
-# binary package built against a newer dependency than what rocker shipped
-# can fail to load with "object 'X' is not exported by 'namespace:Y'".
-RUN R -q -e 'pak::pkg_install("httpgd", upgrade = TRUE)'
+# No `upgrade = TRUE` here — httpgd is small, self-contained, and hasn't
+# triggered a binary-ABI mismatch with rocker's pre-installed deps in
+# practice. The smoke test at the bottom of this Dockerfile fails the
+# build if that ever changes. (See student/Dockerfile for the case where
+# upgrade = TRUE *is* load-bearing.)
+RUN R -q -e 'pak::pkg_install("httpgd")'
 
 # Headless-container workarounds: any consumer (Codespaces, local Docker,
 # JetBrains Gateway) lacks a desktop, so anything that tries to open a
