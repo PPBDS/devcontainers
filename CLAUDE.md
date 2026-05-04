@@ -57,7 +57,10 @@ Audience: students in the data science course.
 
 Contents (in addition to `base`):
 
-- Pre-installed binary version of `tutorial.helpers`, sourced from the PPBDS r-universe (`https://ppbds.r-universe.dev`). Add other course packages here (`primer`, `ai.tutorials`, etc.) when the syllabus needs them baked in.
+- Pre-installed course R packages:
+  - `tutorial.helpers` from the PPBDS r-universe (`https://ppbds.r-universe.dev`) — binary install.
+  - `vscode.tutorials` from GitHub source (`PPBDS/vscode.tutorials`) — pak builds from HEAD. Switch to a binary install once the package is registered on the r-universe.
+- Add other course packages (`primer`, `ai.tutorials`, etc.) when the syllabus needs them baked in.
 
 Does NOT include:
 
