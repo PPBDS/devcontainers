@@ -57,10 +57,10 @@ Audience: students in the data science course.
 
 Contents (in addition to `base`):
 
-- Pre-installed course R packages:
-  - `tutorial.helpers` from the PPBDS r-universe (`https://ppbds.r-universe.dev`) — binary install.
-  - `vscode.tutorials` from GitHub source (`PPBDS/vscode.tutorials`) — pak builds from HEAD. Switch to a binary install once the package is registered on the r-universe.
-- Add other course packages (`primer`, `ai.tutorials`, etc.) when the syllabus needs them baked in.
+- Pre-installed course R packages, all installed from GitHub source via `pak::pkg_install("PPBDS/<name>")` so a fresh image always tracks the latest commit on each package's default branch. The rest of the PPBDS ecosystem expects the development version, not whatever an r-universe build cycle (or CRAN) most recently blessed.
+  - `tutorial.helpers` from `PPBDS/tutorial.helpers`
+  - `vscode.tutorials` from `PPBDS/vscode.tutorials`
+- Add other course packages (`primer`, `ai.tutorials`, etc.) following the same `PPBDS/<name>` pattern when the syllabus needs them baked in.
 
 Does NOT include:
 

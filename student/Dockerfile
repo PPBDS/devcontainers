@@ -3,22 +3,23 @@
 ARG BASE_TAG=latest
 FROM ghcr.io/ppbds/devcontainers/base:${BASE_TAG}
 
-# Course R packages.
-# - tutorial.helpers from the PPBDS r-universe (binary install).
-# - vscode.tutorials from GitHub source — not yet on the r-universe.
-#   Switch to the bare name "vscode.tutorials" (binary) once the package
-#   is registered at https://ppbds.r-universe.dev.
-# Prepend PPBDS to the existing repo list rather than replacing it — the
-# rocker base ships with Posit Public Package Manager (P3M) configured as
-# the CRAN repo, which serves Linux binaries. Replacing it would force
-# source builds for transitive deps (e.g., learnr), which can hit
-# cross-version breakage. Add primer, ai.tutorials, etc. when needed.
-RUN R -q -e 'options(repos = c( \
-        PPBDS = "https://ppbds.r-universe.dev", \
-        getOption("repos") \
-    )); \
-    pak::pkg_install(c( \
-        "tutorial.helpers", \
+# Course R packages, both installed from GitHub source via pak so a fresh
+# image always tracks the latest commit on each package's default branch.
+# This matches PPBDS practice — codespace-starter's old setup.sh did the
+# same, with the rationale that the rest of the PPBDS ecosystem expects
+# the development version, not whatever an r-universe build cycle (or
+# CRAN) most recently blessed.
+#
+# Add primer, ai.tutorials, etc. as further "PPBDS/<name>" entries here
+# when the syllabus needs them baked in.
+#
+# upgrade = TRUE forces pak to pull the latest version of every
+# transitive dep (learnr, knitr, rmarkdown, xfun, ...). Without this, a
+# binary dep built against a newer version of xfun than what rocker
+# shipped fails to load with "object 'attr' is not exported by
+# 'namespace:xfun'".
+RUN R -q -e 'pak::pkg_install(c( \
+        "PPBDS/tutorial.helpers", \
         "PPBDS/vscode.tutorials" \
     ), upgrade = TRUE)'
 
