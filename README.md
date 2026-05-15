@@ -16,11 +16,11 @@ In a downstream repo's `.devcontainer/devcontainer.json`:
 
 ```jsonc
 {
-  "image": "ghcr.io/ppbds/devcontainers/dev:0.1.0"
+  "image": "ghcr.io/ppbds/devcontainers/dev:X.Y.Z"
 }
 ```
 
-Pin to a semver tag (e.g. `:0.1.0`) for stability. `:latest` floats with `main` and is fine for development but not for student-facing repos.
+Replace `X.Y.Z` with the latest tag from the [releases page](https://github.com/PPBDS/devcontainers/releases). Pin to a specific semver tag for stability — `:latest` floats with `main` and is fine for development but not for student-facing repos.
 
 ## Tag families
 
