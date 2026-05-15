@@ -32,6 +32,29 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     && apt-get update && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
+# AI coding-assistant CLIs. Three tools, three providers, three billing
+# models. Students choose which to use and supply their own credentials
+# via Codespaces user secrets (https://github.com/settings/codespaces):
+#   - claude  (Claude Code, Anthropic) — needs ANTHROPIC_API_KEY
+#   - gemini  (Gemini CLI, Google)     — free tier available, else GOOGLE_API_KEY
+#   - aider   (multi-provider)         — supports DeepSeek/OpenRouter
+#                                          for cost-sensitive usage
+#
+# Node hosts the two npm-distributed CLIs. pipx installs aider into an
+# isolated venv with shims in /usr/local/bin (on every user's PATH),
+# avoiding the PEP 668 lockout on Ubuntu Noble's system Python.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        nodejs \
+        npm \
+        pipx \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PIPX_HOME=/opt/pipx \
+    PIPX_BIN_DIR=/usr/local/bin
+
+RUN npm install -g @anthropic-ai/claude-code @google/gemini-cli \
+    && pipx install aider-chat
+
 # Quarto. Use dpkg --print-architecture so the same Dockerfile works on
 # amd64 and arm64 builders.
 RUN set -eux; \
@@ -81,9 +104,12 @@ ENV BROWSER=/usr/bin/true
 # touch lock files or caches don't trip permission errors.
 RUN chmod -R g+w /usr/local/lib/R/site-library
 
-# Smoke test: every package baked in must actually load. Catches binary-ABI
-# mismatches at build time instead of at Codespace-launch time.
+# R smoke test: every baked-in package must actually load. Catches
+# binary-ABI mismatches at build time instead of at Codespace-launch time.
 # --vanilla skips Rprofile so this isolates the package-load path itself.
 RUN R --vanilla -e 'for (p in c("pak", "httpgd")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)'
+
+# CLI smoke test: every shell tool must be on PATH and runnable.
+RUN claude --version && gemini --version && aider --version
 
 # Locale (en_US.UTF-8) and timezone (Etc/UTC) are inherited from the rocker base.

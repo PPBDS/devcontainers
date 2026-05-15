@@ -26,6 +26,10 @@ Contents:
   - V8 (for `katex`, `V8`): `libnode-dev`
   - Text shaping for `ragg`/`textshaping`: `libfontconfig1-dev`, `libharfbuzz-dev`, `libfribidi-dev`
 - GitHub CLI (`gh`), installed from the official apt repo
+- AI coding-assistant CLIs (course-required tools — students supply their own API keys via Codespaces user secrets at https://github.com/settings/codespaces; the image is inert until credentials are present):
+  - `claude` (Claude Code) — Anthropic only. Requires `ANTHROPIC_API_KEY`.
+  - `gemini` (Gemini CLI) — Google. Free tier available, else `GOOGLE_API_KEY`.
+  - `aider` — multi-provider. Cost-flexible: students can point it at DeepSeek directly (`DEEPSEEK_API_KEY`) or at OpenRouter (`OPENROUTER_API_KEY`) for a single key across many models.
 - Quarto, pinned via a build arg
 - `arf` (Rust-based R console), pinned via a build arg, installed under the `rstudio` user so it lives at `/home/rstudio/.cargo/bin/arf` — matches what consumer `devcontainer.json`s set as `r.rterm.linux`
 - `pak` and `httpgd` (R packages — fast parallel installer and graphics device, both used by every downstream image)
@@ -65,7 +69,6 @@ Contents (in addition to `base`):
 Does NOT include:
 
 - Package development tooling (devtools, pkgdown, R CMD check deps) — students don't need it and it slows the image
-- Source-builds of PPBDS packages — students get binary releases from r-universe
 - VS Code settings/extensions (font, theme, `vscode-r-tutorials`) — those live in `codespace-starter`'s `devcontainer.json`, not in this image, so the image stays editor-agnostic
 - A workaround for the Codespace `GITHUB_TOKEN` scoping behavior. The default token is repo-scoped by design; students who need to push elsewhere run `gh auth login` once per Codespace. Documented in `codespace-starter`'s README, not patched in the image.
 
