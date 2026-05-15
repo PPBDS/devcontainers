@@ -7,6 +7,7 @@ FROM ghcr.io/rocker-org/devcontainer/tidyverse:4.4@sha256:1b9c452558c17d282a5c5f
 
 ARG QUARTO_VERSION=1.9.37
 ARG ARF_VERSION=0.3.1
+ARG NODE_MAJOR=22
 
 # System libraries needed by both downstream images.
 #  - Geospatial: sf, terra, etc.
@@ -40,12 +41,16 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 #   - aider   (multi-provider)         — supports DeepSeek/OpenRouter
 #                                          for cost-sensitive usage
 #
-# Node hosts the two npm-distributed CLIs. pipx installs aider into an
-# isolated venv with shims in /usr/local/bin (on every user's PATH),
-# avoiding the PEP 668 lockout on Ubuntu Noble's system Python.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Node hosts the two npm-distributed CLIs. We install from NodeSource
+# rather than apt: Ubuntu Noble's nodejs is 18.x, but @google/gemini-cli
+# bundles undici which needs the `File` global (Node 20+). NodeSource
+# gives us a current LTS line (pinned via NODE_MAJOR above). pipx
+# installs aider into an isolated venv with shims in /usr/local/bin (on
+# every user's PATH), avoiding the PEP 668 lockout on Noble's system
+# Python.
+RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash - \
+    && apt-get install -y --no-install-recommends \
         nodejs \
-        npm \
         pipx \
     && rm -rf /var/lib/apt/lists/*
 
