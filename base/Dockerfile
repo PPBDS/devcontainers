@@ -1,9 +1,12 @@
 # syntax=docker/dockerfile:1.7
 
-# Pinned by digest. The :4.4 tag floats as Rocker patches the image; the
-# digest freezes us at a known build. To bump: pull :4.4 fresh, copy the
-# new digest in, commit deliberately. Do not switch to :4.4 unpinned.
-FROM ghcr.io/rocker-org/devcontainer/tidyverse:4.4@sha256:1b9c452558c17d282a5c5f19efb50f268366a1eb9dac54e3a3108b1688db002f
+# Pinned by digest. The :4.5 tag floats as Rocker patches the image; the
+# digest freezes us at a known build. To bump: pull :4.5 fresh, copy the
+# new digest in, commit deliberately. Do not switch to :4.5 unpinned.
+# R version note: this base is R 4.5 (rocker's newest devcontainer image).
+# R 4.6.0 shipped 2026-04-24 but rocker has not yet published a :4.6
+# devcontainer image; revisit once it exists and its P3M binaries settle.
+FROM ghcr.io/rocker-org/devcontainer/tidyverse:4.5@sha256:289c5d02d8115aa209f4a8a49ee9378dccbf623897eed9cc46c87dfbbca9015b
 
 ARG QUARTO_VERSION=1.9.37
 ARG ARF_VERSION=0.3.1
