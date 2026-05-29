@@ -87,13 +87,13 @@ RUN ln -s /home/rstudio/.cargo/bin/arf /usr/local/bin/arf
 # so install once at the base layer.
 RUN R -q -e 'install.packages("pak", repos = sprintf("https://r-lib.github.io/p/pak/stable/%s/%s/%s", .Platform$pkgType, R.Version()$os, R.Version()$arch))'
 
-# httpgd: graphics device used by both dev and student VS Code R extensions.
-# No `upgrade = TRUE` here — httpgd is small, self-contained, and hasn't
-# triggered a binary-ABI mismatch with rocker's pre-installed deps in
-# practice. The smoke test at the bottom of this Dockerfile fails the
-# build if that ever changes. (See student/Dockerfile for the case where
-# upgrade = TRUE *is* load-bearing.)
-RUN R -q -e 'pak::pkg_install("httpgd")'
+# httpgd (graphics device for the VS Code R extension) is intentionally
+# NOT installed here: the rocker devcontainer base already bakes it in via
+# its r-packages feature ("packages": "httpgd"), so a second install was
+# pure redundancy. Do not re-add it. The smoke test at the bottom of this
+# Dockerfile asserts httpgd loads, so if a future base image ever drops
+# it, the build fails loudly here instead of students hitting a missing
+# graphics device at runtime.
 
 # Headless-container workarounds: any consumer (Codespaces, local Docker,
 # JetBrains Gateway) lacks a desktop, so anything that tries to open a
