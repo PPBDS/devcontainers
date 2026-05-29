@@ -8,8 +8,8 @@
 # devcontainer image; revisit once it exists and its P3M binaries settle.
 FROM ghcr.io/rocker-org/devcontainer/tidyverse:4.5@sha256:289c5d02d8115aa209f4a8a49ee9378dccbf623897eed9cc46c87dfbbca9015b
 
-ARG QUARTO_VERSION=1.9.37
-ARG ARF_VERSION=0.3.1
+ARG QUARTO_VERSION=1.9.38
+ARG ARF_VERSION=0.3.4
 ARG NODE_MAJOR=22
 
 # System libraries needed by both downstream images.
