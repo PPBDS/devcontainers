@@ -25,8 +25,7 @@ Replace `X.Y.Z` with the latest tag from the [releases page](https://github.com/
 ## Tag families
 
 - `:latest` — most recent successful build from `main`. Convenient, not stable.
-- `:X.Y.Z` and `:X.Y` — semver tags from a GitHub release on this repo. The canonical stable pin.
-- `:<semester>` (e.g. `:fa25`) — `student` only. A moving channel for a single semester, applied manually by retagging a tested release.
+- `:X.Y.Z` and `:X.Y` — semver tags from a GitHub release on this repo. The canonical stable pin. `codespace-starter` pins to a specific `:X.Y.Z` and bumps it deliberately.
 
 ## AI coding assistants
 
