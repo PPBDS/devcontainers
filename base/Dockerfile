@@ -71,12 +71,27 @@ RUN npm install -g \
         "@google/gemini-cli@${GEMINI_VERSION}" \
     && pipx install aider-chat
 
-# Gemini CLI is a global npm install in an immutable image; the runtime
-# user (rstudio) can't write the global node_modules, so Gemini's
-# self-updater fails with a red error on every launch. Disable the update
-# check — the pinned GEMINI_VERSION above is the deliberate version knob.
+# Pre-seed Gemini CLI config for the runtime user (rstudio) so students
+# hit zero launch-time friction. Three settings, three reasons:
+#   - general.enableAutoUpdate=false: the CLI is a global npm install in an
+#     immutable image; the runtime user can't write the global
+#     node_modules, so the self-updater fails with a red error on every
+#     launch. The pinned GEMINI_VERSION above is the deliberate version knob.
+#   - ide.hasSeenNudge=true: suppress the first-run "connect GitHub
+#     Codespaces to Gemini CLI?" prompt. (Undocumented key, but it's what
+#     the CLI itself writes when you pick "don't ask again".)
+#   - ide.enabled=false: leave IDE integration OFF. The companion extension
+#     cannot connect inside Codespaces (confirmed upstream bug), so enabling
+#     it would only trade the prompt for a recurring red "failed to connect"
+#     error. A student who wants it can run /ide enable themselves.
+# These are defaults: the CLI rewrites this file as students use it, so
+# nothing here is locked.
 RUN install -d -o rstudio -g rstudio /home/rstudio/.gemini \
-    && printf '{\n  "general": {\n    "enableAutoUpdate": false\n  }\n}\n' \
+    && printf '%s\n' \
+        '{' \
+        '  "general": { "enableAutoUpdate": false },' \
+        '  "ide": { "hasSeenNudge": true, "enabled": false }' \
+        '}' \
         > /home/rstudio/.gemini/settings.json \
     && chown rstudio:rstudio /home/rstudio/.gemini/settings.json
 
