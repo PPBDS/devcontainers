@@ -80,11 +80,10 @@ Each image is published with these tag families:
 
 - `:latest` — most recent successful build from `main`. Convenient for development; not stable.
 - `:X.Y.Z` and `:X.Y` — semver tags derived from a GitHub release on this repo. The canonical stable pin.
-- `:<semester>` — for the `student` image only: a moving channel like `:fa25`, `:sp26` that points at the semver release blessed for that semester. Lets us patch security fixes within a semester without forcing a manual bump in `codespace-starter`. Applied manually by retagging a tested release; the build workflow does not produce these automatically.
 
 Pin policy:
 
-- `codespace-starter` pins to `:<semester>` and we update that tag deliberately.
+- `codespace-starter` pins to a specific `:X.Y.Z` semver tag and we bump that pin deliberately (a one-line edit to its `.devcontainer/devcontainer.json`). No moving "semester" channel — pin by version, period.
 - PPBDS package repos may pin to `:latest` for `dev` (David's call) or to a semver tag if they want stability.
 
 The R version is encoded in `base`'s FROM line. We do not publish a separate `:r-4.4`-style tag.
@@ -106,7 +105,7 @@ Each Dockerfile ends with a smoke test (`R --vanilla -e 'requireNamespace(...)'`
 
 - **PPBDS package repos** (tutorial.helpers, positron.tutorials, primer, ai.tutorials, etc.): each *should* contain a `.devcontainer/devcontainer.json` of roughly five lines, referencing `ghcr.io/ppbds/devcontainers/dev:<tag>`. Per-repo customization (extra VS Code extensions, postCreate hooks specific to that package) goes in that file, not in the dev image. Migration to this image is in progress; not all repos have switched yet. (Note: `PPBDS/vscode-r-tutorials` is a TypeScript VS Code extension repo, not an R package — it has different devcontainer needs and is not a consumer of `dev`.)
 
-- **`PPBDS/codespace-starter`**: a GitHub template repository. Its `.devcontainer/devcontainer.json` references `ghcr.io/ppbds/devcontainers/student:<semester-tag>`. Students click "Use this template" to create their own repo, then launch a Codespace from it.
+- **`PPBDS/codespace-starter`**: a GitHub template repository. Its `.devcontainer/devcontainer.json` references `ghcr.io/ppbds/devcontainers/student:X.Y.Z` (a specific semver tag). Students click "Use this template" to create their own repo, then launch a Codespace from it.
 
 Do not put student-facing content (problem sets, tutorial seed files, README instructions for students) in *this* repo. That belongs in `codespace-starter`. This repo only builds the image the template references.
 
