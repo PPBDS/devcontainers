@@ -12,6 +12,12 @@ ARG QUARTO_VERSION=1.9.38
 ARG ARF_VERSION=0.3.4
 ARG NODE_MAJOR=22
 
+# AI CLI versions. Pinned so builds are reproducible and the baked version
+# doesn't silently drift behind the registry — drift is what triggers
+# Gemini's self-update nag at launch. Bump deliberately, like Quarto/arf.
+ARG CLAUDE_CODE_VERSION=2.1.179
+ARG GEMINI_VERSION=0.46.0
+
 # System libraries needed by both downstream images.
 #  - Geospatial: sf, terra, etc.
 #  - libnode-dev: satisfies the V8 R package (used by katex)
@@ -60,8 +66,19 @@ RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash - \
 ENV PIPX_HOME=/opt/pipx \
     PIPX_BIN_DIR=/usr/local/bin
 
-RUN npm install -g @anthropic-ai/claude-code @google/gemini-cli \
+RUN npm install -g \
+        "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
+        "@google/gemini-cli@${GEMINI_VERSION}" \
     && pipx install aider-chat
+
+# Gemini CLI is a global npm install in an immutable image; the runtime
+# user (rstudio) can't write the global node_modules, so Gemini's
+# self-updater fails with a red error on every launch. Disable the update
+# check — the pinned GEMINI_VERSION above is the deliberate version knob.
+RUN install -d -o rstudio -g rstudio /home/rstudio/.gemini \
+    && printf '{\n  "general": {\n    "enableAutoUpdate": false\n  }\n}\n' \
+        > /home/rstudio/.gemini/settings.json \
+    && chown rstudio:rstudio /home/rstudio/.gemini/settings.json
 
 # Quarto. Use dpkg --print-architecture so the same Dockerfile works on
 # amd64 and arm64 builders.
