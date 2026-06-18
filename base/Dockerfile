@@ -13,10 +13,10 @@ ARG ARF_VERSION=0.3.4
 ARG NODE_MAJOR=22
 
 # AI CLI versions. Pinned so builds are reproducible and the baked version
-# doesn't silently drift behind the registry — drift is what triggers
-# Gemini's self-update nag at launch. Bump deliberately, like Quarto/arf.
+# doesn't silently drift behind the registry. Bump deliberately, like
+# Quarto/arf. (Antigravity CLI is the exception — its installer offers no
+# version pin, so `agy` floats; see the agy install block below.)
 ARG CLAUDE_CODE_VERSION=2.1.181
-ARG GEMINI_VERSION=0.47.0
 ARG CODEX_VERSION=0.141.0
 
 # System libraries needed by both downstream images.
@@ -45,21 +45,26 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 
 # AI coding-assistant CLIs. Four tools spanning several providers and billing
 # models (aider is itself multi-provider). Students choose which to use. The
-# recommended way to authenticate
-# is to SIGN IN on first run with the matching account (a flat-rate plan, not
-# metered API calls); an API key supplied via Codespaces user secrets
-# (https://github.com/settings/codespaces) is the fallback:
-#   - claude  (Claude Code, Anthropic) — sign in with a Claude plan, or ANTHROPIC_API_KEY
-#   - gemini  (Gemini CLI, Google)     — sign in (free tier), or GOOGLE_API_KEY
-#   - codex   (Codex CLI, OpenAI)      — sign in with a ChatGPT plan, or `codex login`
-#   - aider   (multi-provider)         — key-only: DeepSeek/OpenRouter/OpenAI/Anthropic
+# recommended way to authenticate is to SIGN IN on first run with the matching
+# account (a flat-rate plan, not metered API calls); an API key supplied via
+# Codespaces user secrets (https://github.com/settings/codespaces) is the
+# fallback:
+#   - claude  (Claude Code, Anthropic)  — sign in with a Claude plan, or ANTHROPIC_API_KEY
+#   - codex   (Codex CLI, OpenAI)        — sign in with a ChatGPT plan, or `codex login`
+#   - agy     (Antigravity CLI, Google)  — sign in with a Google account, or ANTIGRAVITY_API_KEY
+#   - aider   (multi-provider)           — key-only: DeepSeek/OpenRouter/OpenAI/Anthropic
 #
-# Node hosts the three npm-distributed CLIs (claude, gemini, codex). We
-# install from NodeSource rather than apt: Ubuntu Noble's nodejs is 18.x,
-# but @google/gemini-cli bundles undici which needs the `File` global (Node
-# 20+). NodeSource gives us a current LTS line (pinned via NODE_MAJOR above).
-# pipx installs aider into an isolated venv with shims in /usr/local/bin (on
-# every user's PATH), avoiding the PEP 668 lockout on Noble's system Python.
+# NOTE: Google's Gemini CLI was REMOVED. Google EOL'd the consumer Gemini CLI
+# on 2026-06-18 — the free/sign-in path stopped serving requests — and pushed
+# everyone to Antigravity. The Google slot is now the Antigravity CLI (`agy`,
+# installed further below via Google's curl installer, alongside arf).
+#
+# Node hosts the npm-distributed CLIs (claude, codex). We install from
+# NodeSource rather than apt: Ubuntu Noble's nodejs is 18.x, too old for the
+# current Claude Code / Codex packages. NodeSource gives us a current LTS line
+# (pinned via NODE_MAJOR above). pipx installs aider into an isolated venv with
+# shims in /usr/local/bin (on every user's PATH), avoiding the PEP 668 lockout
+# on Noble's system Python.
 RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash - \
     && apt-get install -y --no-install-recommends \
         nodejs \
@@ -71,36 +76,11 @@ ENV PIPX_HOME=/opt/pipx \
 
 RUN npm install -g \
         "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
-        "@google/gemini-cli@${GEMINI_VERSION}" \
         "@openai/codex@${CODEX_VERSION}" \
     && pipx install aider-chat
 
-# Pre-seed Gemini CLI config for the runtime user (rstudio) so students
-# hit zero launch-time friction. Three settings, three reasons:
-#   - general.enableAutoUpdate=false: the CLI is a global npm install in an
-#     immutable image; the runtime user can't write the global
-#     node_modules, so the self-updater fails with a red error on every
-#     launch. The pinned GEMINI_VERSION above is the deliberate version knob.
-#   - ide.hasSeenNudge=true: suppress the first-run "connect GitHub
-#     Codespaces to Gemini CLI?" prompt. (Undocumented key, but it's what
-#     the CLI itself writes when you pick "don't ask again".)
-#   - ide.enabled=false: leave IDE integration OFF. The companion extension
-#     cannot connect inside Codespaces (confirmed upstream bug), so enabling
-#     it would only trade the prompt for a recurring red "failed to connect"
-#     error. A student who wants it can run /ide enable themselves.
-# These are defaults: the CLI rewrites this file as students use it, so
-# nothing here is locked.
-RUN install -d -o rstudio -g rstudio /home/rstudio/.gemini \
-    && printf '%s\n' \
-        '{' \
-        '  "general": { "enableAutoUpdate": false },' \
-        '  "ide": { "hasSeenNudge": true, "enabled": false }' \
-        '}' \
-        > /home/rstudio/.gemini/settings.json \
-    && chown rstudio:rstudio /home/rstudio/.gemini/settings.json
-
-# Pre-seed Codex CLI config for the runtime user (rstudio), same idea as the
-# Gemini block above. The one setting that matters for an immutable image:
+# Pre-seed Codex CLI config for the runtime user (rstudio). The one setting
+# that matters for an immutable image:
 #   - check_for_update_on_startup=false: the CLI is a global npm install the
 #     runtime user can't overwrite, so a startup update check is pointless
 #     noise. The Codex docs say to disable it "when updates are centrally
@@ -122,18 +102,28 @@ RUN set -eux; \
     rm /tmp/quarto.deb; \
     quarto --version
 
-# arf: Rust-based R console. Installed under the rstudio user so the binary
-# lands at /home/rstudio/.cargo/bin/arf, matching what consumer
-# devcontainer.json files reference as r.rterm.linux.
+# Per-user installers, run as rstudio so their binaries land under
+# /home/rstudio (arf in ~/.cargo/bin, agy in ~/.local/bin):
+#  - arf: Rust-based R console. Path matches what consumer devcontainer.json
+#    files reference as r.rterm.linux.
+#  - agy: Antigravity CLI, Google's terminal coding agent and the successor to
+#    the now-EOL'd Gemini CLI. NOTE: its installer offers NO version pin (always
+#    latest), so unlike every other tool here agy floats with each image
+#    rebuild. Accepted because there is no pin mechanism; the CLI smoke test
+#    below still fails the build if a future release breaks. Auth at runtime is
+#    Google sign-in (prints a URL + one-time code, works headless in Codespaces)
+#    or an ANTIGRAVITY_API_KEY from Google AI Studio.
 USER rstudio
 RUN curl --proto '=https' --tlsv1.2 -fsSL \
         "https://github.com/eitsupi/arf/releases/download/v${ARF_VERSION}/arf-console-installer.sh" | sh
+RUN curl -fsSL https://antigravity.google/cli/install.sh | bash
 USER root
 
-# Symlink arf to a stable system path so consumer devcontainer.json files
-# don't have to hard-code "/home/rstudio/...". If the image's default user
-# ever changes, only base/Dockerfile needs updating, not every consumer.
-RUN ln -s /home/rstudio/.cargo/bin/arf /usr/local/bin/arf
+# Symlink both per-user binaries to a stable system path so consumer config
+# doesn't hard-code "/home/rstudio/...". If the image's default user ever
+# changes, only base/Dockerfile needs updating, not every consumer.
+RUN ln -s /home/rstudio/.cargo/bin/arf /usr/local/bin/arf \
+    && ln -s /home/rstudio/.local/bin/agy /usr/local/bin/agy
 
 # pak: fast parallel R package installer. Used by both downstream images,
 # so install once at the base layer.
@@ -167,6 +157,6 @@ RUN chmod -R g+w /usr/local/lib/R/site-library
 RUN R --vanilla -e 'for (p in c("pak", "httpgd")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)'
 
 # CLI smoke test: every shell tool must be on PATH and runnable.
-RUN claude --version && gemini --version && codex --version && aider --version
+RUN claude --version && codex --version && agy --version && aider --version
 
 # Locale (en_US.UTF-8) and timezone (Etc/UTC) are inherited from the rocker base.

@@ -26,10 +26,10 @@ Contents:
   - V8 (for `katex`, `V8`): `libnode-dev`
   - Text shaping for `ragg`/`textshaping`: `libfontconfig1-dev`, `libharfbuzz-dev`, `libfribidi-dev`
 - GitHub CLI (`gh`), installed from the official apt repo
-- AI coding-assistant CLIs (course-required tools — the image ships no credentials and is inert until each tool has either an account sign-in or an API key). The recommended path is account sign-in on first run; API keys via Codespaces user secrets (https://github.com/settings/codespaces) are the fallback. Versions are pinned via build args and bumped deliberately:
+- AI coding-assistant CLIs (course-required tools — the image ships no credentials and is inert until each tool has either an account sign-in or an API key). The recommended path is account sign-in on first run; API keys via Codespaces user secrets (https://github.com/settings/codespaces) are the fallback. Pinned via build args and bumped deliberately, except `agy` (see below):
   - `claude` (Claude Code) — Anthropic. Sign in with a Claude plan, or `ANTHROPIC_API_KEY`.
-  - `gemini` (Gemini CLI) — Google. Sign in (free tier), or `GOOGLE_API_KEY`.
   - `codex` (Codex CLI) — OpenAI. Sign in with a ChatGPT plan, or `codex login`; does not read `OPENAI_API_KEY`. Startup update check is pre-disabled (`~/.codex/config.toml`), since the CLI is a global install in an immutable image.
+  - `agy` (Antigravity CLI) — Google. Sign in with a Google account, or `ANTIGRAVITY_API_KEY`. Replaced the Gemini CLI, which Google EOL'd 2026-06-18 (consumer/free path stopped serving). Installed via Google's `curl … | bash` installer, which offers **no version pin**, so `agy` floats with each rebuild (the CLI smoke test still gates a broken release).
   - `aider` — multi-provider, key-only. Cost-flexible: point it at DeepSeek directly (`DEEPSEEK_API_KEY`), OpenRouter (`OPENROUTER_API_KEY`), or OpenAI (`OPENAI_API_KEY`).
 - Quarto, pinned via a build arg
 - `arf` (Rust-based R console), pinned via a build arg, installed under the `rstudio` user so it lives at `/home/rstudio/.cargo/bin/arf` — matches what consumer `devcontainer.json`s set as `r.rterm.linux`
