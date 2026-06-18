@@ -17,6 +17,7 @@ ARG NODE_MAJOR=22
 # Gemini's self-update nag at launch. Bump deliberately, like Quarto/arf.
 ARG CLAUDE_CODE_VERSION=2.1.179
 ARG GEMINI_VERSION=0.46.0
+ARG CODEX_VERSION=0.141.0
 
 # System libraries needed by both downstream images.
 #  - Geospatial: sf, terra, etc.
@@ -42,21 +43,23 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     && apt-get update && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
-# AI coding-assistant CLIs. Three tools, three providers, three billing
-# models. Students choose which to use and supply their own credentials
-# via Codespaces user secrets (https://github.com/settings/codespaces):
-#   - claude  (Claude Code, Anthropic) — needs ANTHROPIC_API_KEY
-#   - gemini  (Gemini CLI, Google)     — free tier available, else GOOGLE_API_KEY
-#   - aider   (multi-provider)         — supports DeepSeek/OpenRouter
-#                                          for cost-sensitive usage
+# AI coding-assistant CLIs. Four tools spanning several providers and billing
+# models (aider is itself multi-provider). Students choose which to use. The
+# recommended way to authenticate
+# is to SIGN IN on first run with the matching account (a flat-rate plan, not
+# metered API calls); an API key supplied via Codespaces user secrets
+# (https://github.com/settings/codespaces) is the fallback:
+#   - claude  (Claude Code, Anthropic) — sign in with a Claude plan, or ANTHROPIC_API_KEY
+#   - gemini  (Gemini CLI, Google)     — sign in (free tier), or GOOGLE_API_KEY
+#   - codex   (Codex CLI, OpenAI)      — sign in with a ChatGPT plan, or `codex login`
+#   - aider   (multi-provider)         — key-only: DeepSeek/OpenRouter/OpenAI/Anthropic
 #
-# Node hosts the two npm-distributed CLIs. We install from NodeSource
-# rather than apt: Ubuntu Noble's nodejs is 18.x, but @google/gemini-cli
-# bundles undici which needs the `File` global (Node 20+). NodeSource
-# gives us a current LTS line (pinned via NODE_MAJOR above). pipx
-# installs aider into an isolated venv with shims in /usr/local/bin (on
-# every user's PATH), avoiding the PEP 668 lockout on Noble's system
-# Python.
+# Node hosts the three npm-distributed CLIs (claude, gemini, codex). We
+# install from NodeSource rather than apt: Ubuntu Noble's nodejs is 18.x,
+# but @google/gemini-cli bundles undici which needs the `File` global (Node
+# 20+). NodeSource gives us a current LTS line (pinned via NODE_MAJOR above).
+# pipx installs aider into an isolated venv with shims in /usr/local/bin (on
+# every user's PATH), avoiding the PEP 668 lockout on Noble's system Python.
 RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash - \
     && apt-get install -y --no-install-recommends \
         nodejs \
@@ -69,6 +72,7 @@ ENV PIPX_HOME=/opt/pipx \
 RUN npm install -g \
         "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
         "@google/gemini-cli@${GEMINI_VERSION}" \
+        "@openai/codex@${CODEX_VERSION}" \
     && pipx install aider-chat
 
 # Pre-seed Gemini CLI config for the runtime user (rstudio) so students
@@ -94,6 +98,19 @@ RUN install -d -o rstudio -g rstudio /home/rstudio/.gemini \
         '}' \
         > /home/rstudio/.gemini/settings.json \
     && chown rstudio:rstudio /home/rstudio/.gemini/settings.json
+
+# Pre-seed Codex CLI config for the runtime user (rstudio), same idea as the
+# Gemini block above. The one setting that matters for an immutable image:
+#   - check_for_update_on_startup=false: the CLI is a global npm install the
+#     runtime user can't overwrite, so a startup update check is pointless
+#     noise. The Codex docs say to disable it "when updates are centrally
+#     managed" — that's us; CODEX_VERSION above is the deliberate version knob.
+# Onboarding tooltips and analytics are left at their defaults. Codex rewrites
+# this file as students use it, so nothing here is locked.
+RUN install -d -o rstudio -g rstudio /home/rstudio/.codex \
+    && printf '%s\n' 'check_for_update_on_startup = false' \
+        > /home/rstudio/.codex/config.toml \
+    && chown rstudio:rstudio /home/rstudio/.codex/config.toml
 
 # Quarto. Use dpkg --print-architecture so the same Dockerfile works on
 # amd64 and arm64 builders.
@@ -150,6 +167,6 @@ RUN chmod -R g+w /usr/local/lib/R/site-library
 RUN R --vanilla -e 'for (p in c("pak", "httpgd")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)'
 
 # CLI smoke test: every shell tool must be on PATH and runnable.
-RUN claude --version && gemini --version && aider --version
+RUN claude --version && gemini --version && codex --version && aider --version
 
 # Locale (en_US.UTF-8) and timezone (Etc/UTC) are inherited from the rocker base.
