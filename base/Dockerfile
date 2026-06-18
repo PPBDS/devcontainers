@@ -15,8 +15,8 @@ ARG NODE_MAJOR=22
 # AI CLI versions. Pinned so builds are reproducible and the baked version
 # doesn't silently drift behind the registry — drift is what triggers
 # Gemini's self-update nag at launch. Bump deliberately, like Quarto/arf.
-ARG CLAUDE_CODE_VERSION=2.1.179
-ARG GEMINI_VERSION=0.46.0
+ARG CLAUDE_CODE_VERSION=2.1.181
+ARG GEMINI_VERSION=0.47.0
 ARG CODEX_VERSION=0.141.0
 
 # System libraries needed by both downstream images.
