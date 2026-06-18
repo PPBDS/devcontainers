@@ -58,7 +58,7 @@ Configure each key as a personal Codespaces secret so it appears as an environme
 
    (`codex` authenticates by signing in with a ChatGPT plan, or via `codex login`; it does not read `OPENAI_API_KEY`.)
 
-4. Under **Repository access**, grant access to the repos you launch Codespaces from (typically your `codespace-starter`-derived repo).
+4. Under **Repository access**, grant access to the repos you launch Codespaces from (typically `PPBDS/codespace-starter` itself, and any other repo you open Codespaces on).
 5. Save. The next Codespace you launch will have those env vars available, and the CLIs will pick them up automatically.
 
 You only need to set up the keys for the tools you actually plan to use. Most students set one of (`DEEPSEEK_API_KEY` or `OPENROUTER_API_KEY`) plus optionally `ANTHROPIC_API_KEY` for higher-quality work when needed.

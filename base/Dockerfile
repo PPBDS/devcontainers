@@ -43,8 +43,9 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     && apt-get update && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
-# AI coding-assistant CLIs. Four tools, four providers, several billing
-# models. Students choose which to use. The recommended way to authenticate
+# AI coding-assistant CLIs. Four tools spanning several providers and billing
+# models (aider is itself multi-provider). Students choose which to use. The
+# recommended way to authenticate
 # is to SIGN IN on first run with the matching account (a flat-rate plan, not
 # metered API calls); an API key supplied via Codespaces user secrets
 # (https://github.com/settings/codespaces) is the fallback:

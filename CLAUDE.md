@@ -108,7 +108,7 @@ Each Dockerfile ends with a smoke test (`R --vanilla -e 'requireNamespace(...)'`
 
 - **`PPBDS/codespace-starter`**: the repo students launch their Codespace from. Its `.devcontainer/devcontainer.json` references `ghcr.io/ppbds/devcontainers/student:X.Y.Z` (a specific semver tag). Students launch a Codespace on `codespace-starter` itself, then run its `make_repo.sh` to create and clone a separate personal work repo where they save their work.
 
-Do not put student-facing content (problem sets, tutorial seed files, README instructions for students) in *this* repo. That belongs in `codespace-starter`. This repo only builds the image the template references.
+Do not put student-facing content (problem sets, tutorial seed files, README instructions for students) in *this* repo. That belongs in `codespace-starter`. This repo only builds the image that `codespace-starter` references.
 
 ## Coding and style conventions
 
