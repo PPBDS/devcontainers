@@ -29,15 +29,18 @@ Replace `X.Y.Z` with the latest tag from the [releases page](https://github.com/
 
 ## AI coding assistants
 
-The `base` image (and therefore `dev` and `student`) ships three AI coding CLIs so that students and developers can pick the model that fits their cost and quality needs:
+The `base` image (and therefore `dev` and `student`) ships four AI coding CLIs so that students and developers can pick the model that fits their cost and quality needs:
 
 - **`claude`** — [Claude Code](https://docs.anthropic.com/claude-code). Anthropic's CLI, single-provider, uses Claude models. Highest quality, highest cost.
 - **`gemini`** — [Gemini CLI](https://github.com/google-gemini/gemini-cli). Google's CLI, free tier available.
+- **`codex`** — [Codex CLI](https://developers.openai.com/codex/cli). OpenAI's CLI, uses GPT/Codex models. Included with a ChatGPT Plus/Pro plan.
 - **`aider`** — [Aider](https://aider.chat). Multi-provider. Point it at DeepSeek, OpenRouter, OpenAI, Anthropic, or any OpenAI-compatible endpoint. The cost-flexible option.
 
-The images themselves ship **no credentials**. Each CLI is inert until the relevant API key is present in the environment. Students supply their own keys via Codespaces user secrets (instructions below).
+The images ship **no credentials**. The recommended way to authenticate is to **sign in on first run**: start the CLI and complete the account sign-in (a ChatGPT plan for `codex`, a Claude plan for `claude`, a Google account for `gemini`). This bills against a flat-rate subscription rather than metered API calls. As a fallback — and the only option for `aider` — supply an API key via Codespaces user secrets (below); each CLI stays inert until it has either a sign-in or a key.
 
-### Setting up API keys (per-user, one-time)
+### Setting up API keys (the fallback path, per-user, one-time)
+
+API keys are the **fallback** for students who prefer metered billing or who use `aider` (which is key-only). If you sign in to `claude`/`codex`/`gemini` with an account instead, you need none of the keys below.
 
 Configure each key as a personal Codespaces secret so it appears as an environment variable in every Codespace you launch — no need to re-enter it for each new Codespace.
 
@@ -47,10 +50,13 @@ Configure each key as a personal Codespaces secret so it appears as an environme
 
    | Secret name | Used by | Where to get it |
    |---|---|---|
-   | `ANTHROPIC_API_KEY` | `claude` | https://console.anthropic.com |
-   | `GOOGLE_API_KEY` | `gemini` (paid tier; free tier uses OAuth) | https://aistudio.google.com/apikey |
+   | `ANTHROPIC_API_KEY` | `claude` (or sign in instead) | https://console.anthropic.com |
+   | `GOOGLE_API_KEY` | `gemini` (paid tier; free tier uses sign-in) | https://aistudio.google.com/apikey |
+   | `OPENAI_API_KEY` | `aider` → OpenAI models | https://platform.openai.com/api-keys |
    | `DEEPSEEK_API_KEY` | `aider` → DeepSeek directly | https://platform.deepseek.com |
    | `OPENROUTER_API_KEY` | `aider` → any model via OpenRouter | https://openrouter.ai/keys |
+
+   (`codex` authenticates by signing in with a ChatGPT plan, or via `codex login`; it does not read `OPENAI_API_KEY`.)
 
 4. Under **Repository access**, grant access to the repos you launch Codespaces from (typically your `codespace-starter`-derived repo).
 5. Save. The next Codespace you launch will have those env vars available, and the CLIs will pick them up automatically.

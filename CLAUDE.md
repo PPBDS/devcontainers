@@ -20,16 +20,17 @@ Audience: nobody directly. This image is the common foundation for `dev` and `st
 
 Contents:
 
-- `ghcr.io/rocker-org/devcontainer/tidyverse` as the FROM line — rocker's devcontainer-flavored tidyverse image. Pinned by SHA digest (the `:4.4` tag floats as Rocker patches the image; the digest freezes us at a known build). Bumping the digest is a deliberate commit.
+- `ghcr.io/rocker-org/devcontainer/tidyverse` as the FROM line — rocker's devcontainer-flavored tidyverse image. Pinned by SHA digest (the `:4.5` tag floats as Rocker patches the image; the digest freezes us at a known build). Bumping the digest is a deliberate commit.
 - System libraries needed by both downstream images:
   - Geospatial: `libgdal-dev`, `libproj-dev`, `libgeos-dev`, `libudunits2-dev`
   - V8 (for `katex`, `V8`): `libnode-dev`
   - Text shaping for `ragg`/`textshaping`: `libfontconfig1-dev`, `libharfbuzz-dev`, `libfribidi-dev`
 - GitHub CLI (`gh`), installed from the official apt repo
-- AI coding-assistant CLIs (course-required tools — students supply their own API keys via Codespaces user secrets at https://github.com/settings/codespaces; the image is inert until credentials are present):
-  - `claude` (Claude Code) — Anthropic only. Requires `ANTHROPIC_API_KEY`.
-  - `gemini` (Gemini CLI) — Google. Free tier available, else `GOOGLE_API_KEY`.
-  - `aider` — multi-provider. Cost-flexible: students can point it at DeepSeek directly (`DEEPSEEK_API_KEY`) or at OpenRouter (`OPENROUTER_API_KEY`) for a single key across many models.
+- AI coding-assistant CLIs (course-required tools — the image ships no credentials and is inert until each tool has either an account sign-in or an API key). The recommended path is account sign-in on first run; API keys via Codespaces user secrets (https://github.com/settings/codespaces) are the fallback. Versions are pinned via build args and bumped deliberately:
+  - `claude` (Claude Code) — Anthropic. Sign in with a Claude plan, or `ANTHROPIC_API_KEY`.
+  - `gemini` (Gemini CLI) — Google. Sign in (free tier), or `GOOGLE_API_KEY`.
+  - `codex` (Codex CLI) — OpenAI. Sign in with a ChatGPT plan, or `codex login`; does not read `OPENAI_API_KEY`. Startup update check is pre-disabled (`~/.codex/config.toml`), since the CLI is a global install in an immutable image.
+  - `aider` — multi-provider, key-only. Cost-flexible: point it at DeepSeek directly (`DEEPSEEK_API_KEY`), OpenRouter (`OPENROUTER_API_KEY`), or OpenAI (`OPENAI_API_KEY`).
 - Quarto, pinned via a build arg
 - `arf` (Rust-based R console), pinned via a build arg, installed under the `rstudio` user so it lives at `/home/rstudio/.cargo/bin/arf` — matches what consumer `devcontainer.json`s set as `r.rterm.linux`
 - `pak` and `httpgd` (R packages — fast parallel installer and graphics device, both used by every downstream image)
@@ -72,7 +73,7 @@ Does NOT include:
 - VS Code settings/extensions (font, theme, `vscode-r-tutorials`) — those live in `codespace-starter`'s `devcontainer.json`, not in this image, so the image stays editor-agnostic
 - A workaround for the Codespace `GITHUB_TOKEN` scoping behavior. The default token is repo-scoped by design; students who need to push elsewhere run `gh auth login` once per Codespace. Documented in `codespace-starter`'s README, not patched in the image.
 
-The `student` image is consumed by `PPBDS/codespace-starter`, the GitHub template repository students click "Use this template" on to seed their own repo for the class.
+The `student` image is consumed by `PPBDS/codespace-starter`. Students launch a Codespace directly from `codespace-starter` and run its `make_repo.sh` to create their own separate work repo for the class (they do not fork or "Use this template" — launching from the starter is what lets them benefit from its Codespaces prebuild).
 
 ## Tagging and versioning
 
@@ -86,7 +87,7 @@ Pin policy:
 - `codespace-starter` pins to a specific `:X.Y.Z` semver tag and we bump that pin deliberately (a one-line edit to its `.devcontainer/devcontainer.json`). No moving "semester" channel — pin by version, period.
 - PPBDS package repos may pin to `:latest` for `dev` (David's call) or to a semver tag if they want stability.
 
-The R version is encoded in `base`'s FROM line. We do not publish a separate `:r-4.4`-style tag.
+The R version is encoded in `base`'s FROM line. We do not publish a separate `:r-4.5`-style tag.
 
 ## CI and build
 
@@ -105,7 +106,7 @@ Each Dockerfile ends with a smoke test (`R --vanilla -e 'requireNamespace(...)'`
 
 - **PPBDS package repos** (tutorial.helpers, positron.tutorials, primer, ai.tutorials, etc.): each *should* contain a `.devcontainer/devcontainer.json` of roughly five lines, referencing `ghcr.io/ppbds/devcontainers/dev:<tag>`. Per-repo customization (extra VS Code extensions, postCreate hooks specific to that package) goes in that file, not in the dev image. Migration to this image is in progress; not all repos have switched yet. (Note: `PPBDS/vscode-r-tutorials` is a TypeScript VS Code extension repo, not an R package — it has different devcontainer needs and is not a consumer of `dev`.)
 
-- **`PPBDS/codespace-starter`**: a GitHub template repository. Its `.devcontainer/devcontainer.json` references `ghcr.io/ppbds/devcontainers/student:X.Y.Z` (a specific semver tag). Students click "Use this template" to create their own repo, then launch a Codespace from it.
+- **`PPBDS/codespace-starter`**: the repo students launch their Codespace from. Its `.devcontainer/devcontainer.json` references `ghcr.io/ppbds/devcontainers/student:X.Y.Z` (a specific semver tag). Students launch a Codespace on `codespace-starter` itself, then run its `make_repo.sh` to create and clone a separate personal work repo where they save their work.
 
 Do not put student-facing content (problem sets, tutorial seed files, README instructions for students) in *this* repo. That belongs in `codespace-starter`. This repo only builds the image the template references.
 
@@ -120,6 +121,6 @@ Do not put student-facing content (problem sets, tutorial seed files, README ins
 ## What this repo is not
 
 - Not a place for application code, R packages, or course content.
-- Not a template repo. Students do not fork or "Use this template" on this repo. They use `PPBDS/codespace-starter`.
+- Not student-facing. Students never consume this repo directly; they launch a Codespace from `PPBDS/codespace-starter` and run its `make_repo.sh`.
 - Not a Feature registry. If we later want to publish reusable devcontainer Features, that goes in a separate repo (`PPBDS/devcontainer-features` or similar).
 - Not coupled to GitHub Codespaces specifically. The images should work in any devcontainer-compatible environment (VS Code locally with Docker, JetBrains, GitPod). Avoid Codespaces-only assumptions in the Dockerfiles.
