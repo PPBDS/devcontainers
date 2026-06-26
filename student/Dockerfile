@@ -59,6 +59,12 @@ RUN R --vanilla -e 'install.packages("praise", repos = "https://cloud.r-project.
 RUN R -q -e 'pak::pkg_install(c("plotly", "leaflet", "DT", "crosstalk", "shiny", "shinylive"))' \
     && R --vanilla -e 'for (p in c("plotly","leaflet","DT","crosstalk","shiny","shinylive")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)'
 
+# reticulate: R's bridge to Python, pointed at the venv via RETICULATE_PYTHON
+# (set below). This is what makes R↔Python actually work — calling Python from
+# R, and Quarto rendering `{python}` chunks inside a knitr (R) document.
+RUN R -q -e 'pak::pkg_install("reticulate")' \
+    && R --vanilla -e 'if (!requireNamespace("reticulate", quietly = TRUE)) stop("reticulate failed to install")'
+
 USER root
 
 # ── Python data-science stack ────────────────────────────────────────────────
@@ -131,4 +137,29 @@ RUN su rstudio -c "/opt/venv/bin/pip install --no-cache-dir --quiet cowsay" \
 # (build-test verified). Framework is only for standalone data-app projects.
 # The `observable --version` call is the smoke test (fails the build if broken).
 RUN npm install -g @observablehq/framework@1.13.4 && observable --version
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── End-to-end authoring smoke tests ─────────────────────────────────────────
+# These run last, once R + Python + Quarto are all in place, so they exercise
+# the actual student authoring path (not just that packages load). NOTE: they
+# are build-time and headless, so they cannot catch VS Code / extension runtime
+# issues (e.g. the Python extension activating the venv in the R terminal) —
+# that class needs a manual "launch a Codespace and run a tutorial" check.
+#
+# (a) A Quarto doc with BOTH an R chunk and a Python chunk must render to HTML.
+#     Exercises Quarto + knitr + R + reticulate → the /opt/venv Python in one go.
+RUN set -eux; \
+    d="$(mktemp -d)"; cd "$d"; \
+    printf '%s\n' \
+      '---' 'title: smoke' 'format: html' '---' '' \
+      '```{r}' 'r_value <- 1 + 1' '```' '' \
+      '```{python}' 'import pandas as pd' 'shape = pd.DataFrame({"a": [1, 2]}).shape' '```' \
+      > t.qmd; \
+    quarto render t.qmd --to html; \
+    test -s t.html; \
+    echo "QUARTO-R-PY-RENDER OK"; \
+    cd /; rm -rf "$d"
+
+# (b) The course tutorials must be discoverable (catches a broken tutorial pkg).
+RUN R --vanilla -e 'ts <- learnr::available_tutorials("tutorial.helpers"); if (!("getting-started" %in% ts$name)) stop("getting-started tutorial not found"); cat("TUTORIALS OK:", paste(ts$name, collapse = ", "), "\n")'
 # ─────────────────────────────────────────────────────────────────────────────
