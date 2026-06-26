@@ -1,0 +1,32 @@
+# Python data-science stack for the course, mirroring the R curriculum:
+#   wrangling      → pandas (on numpy)
+#   plotting       → matplotlib, seaborn (static)
+#   interactive web viz → plotly, altair (Vega-Lite), folium (maps),
+#                    itables (interactive tables) — all produce self-contained
+#                    JS that publishes to static hosting (GitHub Pages)
+#   app-like (static, WebAssembly) → shiny + shinylive (Shiny compiled to wasm)
+#   modelling/ML   → scikit-learn
+#   regression/inference → statsmodels (the lm() analog)
+#   notebooks      → jupyter, ipykernel
+#                    (also what Quarto's Python engine and the VS Code Jupyter
+#                     extension drive)
+#
+# Top-level pins. The fully-resolved tree (transitive deps) is locked in
+# student/requirements.lock (generated via `uv pip compile`, which the image
+# installs from). Edit this file and recompile to bump.
+numpy==2.5.0
+pandas==3.0.3
+matplotlib==3.11.0
+seaborn==0.13.2
+scikit-learn==1.9.0
+statsmodels==0.14.6
+jupyter==1.1.1
+ipykernel==7.3.0
+
+# Interactive web visualisation + Shinylive (for "fancy" interactive websites).
+plotly==6.8.0
+altair==6.2.2
+folium==0.20.0
+itables==2.8.1
+shiny==1.6.3
+shinylive==0.8.9
