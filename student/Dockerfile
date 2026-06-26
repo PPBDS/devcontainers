@@ -49,6 +49,16 @@ RUN R --vanilla -e 'for (p in c("tutorial.helpers", "vscode.tutorials", "learnr"
 RUN R --vanilla -e 'install.packages("praise", repos = "https://cloud.r-project.org"); if (!requireNamespace("praise", quietly = TRUE)) stop("rstudio cannot install into site-library — check site-library permissions in base image")' \
  && R --vanilla -e 'remove.packages("praise")'
 
+# R interactive-visualisation + Shinylive packages — htmlwidgets for "fancy"
+# interactive output that still publishes to STATIC hosting (GitHub Pages):
+# plotly + leaflet (charts/maps), DT (interactive tables), crosstalk (client-
+# side linking/filtering, no server); plus shiny + shinylive, which compile a
+# Shiny app to WebAssembly (webR) so it too runs on a static host. pak via P3M
+# Linux binaries — fast (~16 s, ~70 MB). (Python equivalents — plotly/altair/
+# folium/itables/shiny/shinylive — are in requirements.lock.)
+RUN R -q -e 'pak::pkg_install(c("plotly", "leaflet", "DT", "crosstalk", "shiny", "shinylive"))' \
+    && R --vanilla -e 'for (p in c("plotly","leaflet","DT","crosstalk","shiny","shinylive")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)'
+
 USER root
 
 # ── Python data-science stack ────────────────────────────────────────────────
@@ -73,13 +83,28 @@ USER root
 # is copied from its official pinned image (no curl-pipe; pinned, unlike agy).
 COPY --from=ghcr.io/astral-sh/uv:0.11.23 /uv /usr/local/bin/uv
 COPY requirements.lock /tmp/requirements.lock
+COPY requirements.txt /tmp/requirements.txt
+
+# Lock-staleness guard: every top-level package in requirements.txt must appear
+# in the lock, so editing the .txt and forgetting to re-run `uv pip compile`
+# fails the build instead of silently shipping a stale lock. Presence-only (no
+# version comparison), so it never false-fails when PyPI publishes new
+# transitive versions.
+RUN set -eu; \
+    while IFS= read -r line; do \
+        case "$line" in ''|\#*) continue ;; esac; \
+        pkg="${line%%[=<>!~ ]*}"; \
+        grep -qiE "^${pkg}==" /tmp/requirements.lock \
+          || { echo "requirements.lock is STALE: '${pkg}' is in requirements.txt but not the lock — run: uv pip compile requirements.txt -o requirements.lock" >&2; exit 1; }; \
+    done < /tmp/requirements.txt
+
 RUN uv venv --seed --python /usr/bin/python3 /opt/venv \
     && uv pip install --python /opt/venv/bin/python --no-cache -r /tmp/requirements.lock \
     && /opt/venv/bin/python -m ipykernel install --prefix /usr/local \
          --name python3 --display-name "Python (data science)" \
     && chgrp -R staff /opt/venv \
     && chmod -R g+w /opt/venv \
-    && rm /tmp/requirements.lock
+    && rm /tmp/requirements.lock /tmp/requirements.txt
 ENV PATH=/opt/venv/bin:$PATH \
     RETICULATE_PYTHON=/opt/venv/bin/python
 
@@ -106,18 +131,4 @@ RUN su rstudio -c "/opt/venv/bin/pip install --no-cache-dir --quiet cowsay" \
 # (build-test verified). Framework is only for standalone data-app projects.
 # The `observable --version` call is the smoke test (fails the build if broken).
 RUN npm install -g @observablehq/framework@1.13.4 && observable --version
-# ─────────────────────────────────────────────────────────────────────────────
-
-# ── R interactive-visualisation + Shinylive packages ─────────────────────────
-# htmlwidgets for "fancy" interactive output that still publishes to STATIC
-# hosting (GitHub Pages): plotly + leaflet (charts/maps), DT (interactive
-# tables), crosstalk (client-side linking/filtering, no server). Plus shiny +
-# shinylive, which compile a Shiny app to WebAssembly (webR) so it too runs on
-# a static host. Installed via pak as rstudio — P3M serves Linux binaries, so
-# this is fast (~16 s) and ~70 MB. (Python equivalents — plotly/altair/folium/
-# itables/shiny/shinylive — are in requirements.txt.)
-USER rstudio
-RUN R -q -e 'pak::pkg_install(c("plotly", "leaflet", "DT", "crosstalk", "shiny", "shinylive"))' \
-    && R --vanilla -e 'for (p in c("plotly","leaflet","DT","crosstalk","shiny","shinylive")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)'
-USER root
 # ─────────────────────────────────────────────────────────────────────────────
