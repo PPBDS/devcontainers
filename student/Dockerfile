@@ -74,13 +74,15 @@ USER root
 #   --seed        → put pip/setuptools/wheel IN the venv, so students can plain
 #                   `pip install` more packages (uv venvs omit pip by default).
 #   --python /usr/bin/python3 → use the system CPython, NOT a uv-managed
-#                   download, so it's the same interpreter R's reticulate uses.
+#                   download, so it's a normal, predictable interpreter.
 #   chgrp staff + g+w → make the venv group-writable (rstudio is in staff), the
 #                   same treatment base gives R's site-library, so a student's
 #                   `pip install` actually has somewhere to write.
-# /opt/venv goes first on PATH and is wired to RETICULATE_PYTHON — a deliberate
-# single-Python choice rather than maintaining two interpreters. uv's own binary
-# is copied from its official pinned image (no curl-pipe; pinned, unlike agy).
+# /opt/venv goes first on PATH, so `python`/`pip`/`jupyter` are the venv's.
+# Quarto runs Python via the jupyter engine (ipykernel) — no reticulate needed.
+# We still set RETICULATE_PYTHON so that IF someone installs R's reticulate
+# (not baked in) it bridges to this same venv rather than a separate Python.
+# uv's own binary is copied from its official pinned image (pinned, unlike agy).
 COPY --from=ghcr.io/astral-sh/uv:0.11.23 /uv /usr/local/bin/uv
 COPY requirements.lock /tmp/requirements.lock
 COPY requirements.txt /tmp/requirements.txt
@@ -131,4 +133,35 @@ RUN su rstudio -c "/opt/venv/bin/pip install --no-cache-dir --quiet cowsay" \
 # (build-test verified). Framework is only for standalone data-app projects.
 # The `observable --version` call is the smoke test (fails the build if broken).
 RUN npm install -g @observablehq/framework@1.13.4 && observable --version
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── End-to-end authoring smoke tests ─────────────────────────────────────────
+# These run last, once R + Python + Quarto are all in place, so they exercise
+# the actual student authoring path (not just that packages load). We render an
+# R doc and a Python doc SEPARATELY — that's how students work (one language per
+# doc), and it covers BOTH Quarto engines without needing reticulate: an R doc
+# uses the knitr engine, a Python-only doc uses the jupyter engine (the venv's
+# ipykernel). NOTE: these are build-time and headless, so they cannot catch VS
+# Code / extension runtime issues (e.g. the Python extension activating the venv
+# in the R terminal) — that class needs a manual "launch a Codespace and run a
+# tutorial" check.
+#
+# (a) An R-only Quarto doc must render to HTML (knitr engine).
+RUN set -eux; \
+    d="$(mktemp -d)"; cd "$d"; \
+    printf '%s\n' '---' 'title: r' 'format: html' '---' '' \
+      '```{r}' 'summary(cars$speed)' '```' > r.qmd; \
+    quarto render r.qmd --to html; test -s r.html; echo "QUARTO-R OK"; \
+    cd /; rm -rf "$d"
+
+# (b) A Python-only Quarto doc must render to HTML (jupyter engine → venv kernel).
+RUN set -eux; \
+    d="$(mktemp -d)"; cd "$d"; \
+    printf '%s\n' '---' 'title: py' 'format: html' 'jupyter: python3' '---' '' \
+      '```{python}' 'import pandas as pd' 'pd.DataFrame({"a": [1, 2]}).describe()' '```' > p.qmd; \
+    quarto render p.qmd --to html; test -s p.html; echo "QUARTO-PY OK"; \
+    cd /; rm -rf "$d"
+
+# (c) The course tutorials must be discoverable (catches a broken tutorial pkg).
+RUN R --vanilla -e 'ts <- learnr::available_tutorials("tutorial.helpers"); if (!("getting-started" %in% ts$name)) stop("getting-started tutorial not found"); cat("TUTORIALS OK:", paste(ts$name, collapse = ", "), "\n")'
 # ─────────────────────────────────────────────────────────────────────────────
