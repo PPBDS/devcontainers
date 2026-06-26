@@ -66,6 +66,9 @@ Contents (in addition to `base`):
   - `tutorial.helpers` from `PPBDS/tutorial.helpers`
   - `vscode.tutorials` from `PPBDS/vscode.tutorials`
 - Add other course packages (`primer`, `ai.tutorials`, etc.) following the same `PPBDS/<name>` pattern when the syllabus needs them baked in.
+- A basic **Python data-science stack** so students can work in Python alongside R (numpy, pandas, matplotlib, seaborn, scikit-learn, statsmodels, jupyter, ipykernel). Installed with `uv` into a venv at `/opt/venv` from a fully-pinned lockfile — `student/requirements.lock`, generated from `student/requirements.txt` via `uv pip compile` (edit the `.txt` and recompile to bump). Notable choices, all build-test-verified: the venv uses the **system** CPython (`uv venv --python /usr/bin/python3`, not a managed download) and is wired to R's reticulate via `RETICULATE_PYTHON` — one interpreter, not two; it's `--seed`ed (has its own `pip`) and made **group-writable** (`staff`, like R's site-library) so a student can `pip install` more packages. A `python3` Jupyter kernel ("Python (data science)") is registered system-wide, so Python works in VS Code notebooks or in Quarto `.qmd` chunks. Footprint: ~150 MB compressed / negligible Codespace-creation time (baked into the image, restored by the prebuild).
+- **Observable** for interactive JavaScript visualisation. Quarto's bundled `{ojs}` cells render Observable Plot / OJS inside `.qmd` documents (pass R/Python data in via `ojs_define()`) — this needs **nothing extra**, it's part of the baked Quarto (build-test verified). Separately, **Observable Framework** (`@observablehq/framework`, pinned; adds the `observable` CLI for `create`/`preview`/`build`) is installed for building standalone data-app/dashboard projects — ~84 MB on disk, smoke-tested via `observable --version`.
+- **Interactive web-viz + Shinylive**, for "fancy" interactive websites that still publish to **static** hosting (GitHub Pages). R htmlwidgets — `plotly`, `leaflet`, `DT`, `crosstalk` (installed via pak, ~70 MB) — and their Python counterparts `plotly`/`altair`/`folium`/`itables` (in `requirements.lock`) emit self-contained client-side JS. `shiny` + `shinylive` (both R and Python) compile Shiny apps to WebAssembly (webR/Pyodide) so even reactive apps run with no server. (Interactive charts *inside* Quarto docs work via these widgets or `{ojs}`; Shinylive embeds via the per-project `quarto-shinylive` extension.)
 
 Does NOT include:
 
@@ -73,7 +76,7 @@ Does NOT include:
 - VS Code settings/extensions (font, theme, `vscode-r-tutorials`) — those live in `codespace-starter`'s `devcontainer.json`, not in this image, so the image stays editor-agnostic
 - A workaround for the Codespace `GITHUB_TOKEN` scoping behavior. The default token is repo-scoped by design; students who need to push elsewhere run `gh auth login` once per Codespace. Documented in `codespace-starter`'s README, not patched in the image.
 
-The `student` image is consumed by `PPBDS/codespace-starter`. Students launch a Codespace directly from `codespace-starter` and run its `make_repo.sh` to create their own separate work repo for the class (they do not fork or "Use this template" — launching from the starter is what lets them benefit from its Codespaces prebuild).
+The `student` image is consumed by `PPBDS/codespace-starter`. Students launch a Codespace directly from `codespace-starter` and run its `connect-repo.sh` to create their own separate work repo for the class (they do not fork or "Use this template" — launching from the starter is what lets them benefit from its Codespaces prebuild).
 
 ## Tagging and versioning
 
@@ -106,7 +109,7 @@ Each Dockerfile ends with a smoke test (`R --vanilla -e 'requireNamespace(...)'`
 
 - **PPBDS package repos** (tutorial.helpers, positron.tutorials, primer, ai.tutorials, etc.): each *should* contain a `.devcontainer/devcontainer.json` of roughly five lines, referencing `ghcr.io/ppbds/devcontainers/dev:<tag>`. Per-repo customization (extra VS Code extensions, postCreate hooks specific to that package) goes in that file, not in the dev image. Migration to this image is in progress; not all repos have switched yet. (Note: `PPBDS/vscode-r-tutorials` is a TypeScript VS Code extension repo, not an R package — it has different devcontainer needs and is not a consumer of `dev`.)
 
-- **`PPBDS/codespace-starter`**: the repo students launch their Codespace from. Its `.devcontainer/devcontainer.json` references `ghcr.io/ppbds/devcontainers/student:X.Y.Z` (a specific semver tag). Students launch a Codespace on `codespace-starter` itself, then run its `make_repo.sh` to create and clone a separate personal work repo where they save their work.
+- **`PPBDS/codespace-starter`**: the repo students launch their Codespace from. Its `.devcontainer/devcontainer.json` references `ghcr.io/ppbds/devcontainers/student:X.Y.Z` (a specific semver tag). Students launch a Codespace on `codespace-starter` itself, then run its `connect-repo.sh` to create and clone a separate personal work repo where they save their work.
 
 Do not put student-facing content (problem sets, tutorial seed files, README instructions for students) in *this* repo. That belongs in `codespace-starter`. This repo only builds the image that `codespace-starter` references.
 
@@ -121,6 +124,6 @@ Do not put student-facing content (problem sets, tutorial seed files, README ins
 ## What this repo is not
 
 - Not a place for application code, R packages, or course content.
-- Not student-facing. Students never consume this repo directly; they launch a Codespace from `PPBDS/codespace-starter` and run its `make_repo.sh`.
+- Not student-facing. Students never consume this repo directly; they launch a Codespace from `PPBDS/codespace-starter` and run its `connect-repo.sh`.
 - Not a Feature registry. If we later want to publish reusable devcontainer Features, that goes in a separate repo (`PPBDS/devcontainer-features` or similar).
 - Not coupled to GitHub Codespaces specifically. The images should work in any devcontainer-compatible environment (VS Code locally with Docker, JetBrains, GitPod). Avoid Codespaces-only assumptions in the Dockerfiles.

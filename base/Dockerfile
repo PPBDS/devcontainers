@@ -60,8 +60,8 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 # installed further below via Google's curl installer, alongside arf).
 #
 # Node hosts the npm-distributed CLIs (claude, codex). We install from
-# NodeSource rather than apt: Ubuntu Noble's nodejs is 18.x, too old for the
-# current Claude Code / Codex packages. NodeSource gives us a current LTS line
+# NodeSource rather than apt: Ubuntu Noble ships Node 18.x, which is past end of
+# life — we want a current Node LTS for the npm CLIs. NodeSource gives us one
 # (pinned via NODE_MAJOR above). pipx installs aider into an isolated venv with
 # shims in /usr/local/bin (on every user's PATH), avoiding the PEP 668 lockout
 # on Noble's system Python.
