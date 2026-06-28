@@ -3,15 +3,20 @@
 ARG BASE_TAG=latest
 FROM ghcr.io/ppbds/devcontainers/base:${BASE_TAG}
 
-# Course R packages, both installed from GitHub source via pak so a fresh
+# Course R packages, all installed from GitHub source via pak so a fresh
 # image always tracks the latest commit on each package's default branch.
 # This matches PPBDS practice — codespace-starter's old setup.sh did the
 # same, with the rationale that the rest of the PPBDS ecosystem expects
 # the development version, not whatever an r-universe build cycle (or
 # CRAN) most recently blessed.
 #
-# Add primer, ai.tutorials, etc. as further "PPBDS/<name>" entries here
-# when the syllabus needs them baked in.
+# These four are also refreshed to the latest commit on every Codespace
+# create via codespace-starter's postCreateCommand; baking them here pre-
+# installs the whole dependency tree (so that refresh is a quick update, not
+# a cold build) and leaves a working fallback if GitHub is unreachable. Note
+# primer.tutorials lives in a SUBDIR of the primer repo, hence the
+# "PPBDS/primer/primer.tutorials" path. Add further "PPBDS/<name>" entries
+# (in BOTH places) when the syllabus needs them.
 #
 # upgrade = TRUE forces pak to pull the latest version of every
 # transitive dep (learnr, knitr, rmarkdown, xfun, ...). Without this, a
@@ -34,13 +39,15 @@ FROM ghcr.io/ppbds/devcontainers/base:${BASE_TAG}
 USER rstudio
 RUN R -q -e 'pak::pkg_install(c( \
         "PPBDS/tutorial.helpers", \
-        "PPBDS/vscode.tutorials" \
+        "PPBDS/vscode.tutorials", \
+        "PPBDS/misc.tutorials", \
+        "PPBDS/primer/primer.tutorials" \
     ), upgrade = TRUE)'
 
 # Smoke test 1: every baked-in package and the learnr/knitr/rmarkdown
 # chain must all load. The original learnr/xfun ABI mismatch failure
 # would have been caught here at build time.
-RUN R --vanilla -e 'for (p in c("tutorial.helpers", "vscode.tutorials", "learnr", "knitr", "rmarkdown")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)'
+RUN R --vanilla -e 'for (p in c("tutorial.helpers", "vscode.tutorials", "misc.tutorials", "primer.tutorials", "learnr", "knitr", "rmarkdown")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)'
 
 # Smoke test 2: rstudio can install a fresh package into site-library
 # without permission errors. Catches the "root-built image leaves
