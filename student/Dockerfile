@@ -3,6 +3,15 @@
 ARG BASE_TAG=latest
 FROM ghcr.io/ppbds/devcontainers/base:${BASE_TAG}
 
+# Never let pak try to `sudo apt-get install` system requirements. The system
+# libraries our packages need are baked into the base image; pak running as the
+# non-root rstudio user can't sudo, and (e.g. for V8's libnode-dev) it even
+# mis-detects baked libs as missing and tries anyway, which fails the build /
+# postCreate / a student's runtime install. With this off pak still PRINTS any
+# sysreqs but builds against the baked libs. (Add new system deps to
+# base/Dockerfile, not via pak.) Applies to the build, postCreate, and runtime.
+ENV PKG_SYSREQS=false
+
 # Course R packages, all installed from GitHub source via pak so a fresh
 # image always tracks the latest commit on each package's default branch.
 # This matches PPBDS practice — codespace-starter's old setup.sh did the

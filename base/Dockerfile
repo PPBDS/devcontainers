@@ -21,8 +21,9 @@ ARG CODEX_VERSION=0.141.0
 
 # System libraries needed by both downstream images.
 #  - Geospatial: sf, terra, etc.
-#  - libnode-dev: satisfies the V8 R package (used by katex)
+#  - libnode-dev: satisfies the V8 R package (used by katex, gt)
 #  - text shaping libs: ragg / textshaping (modern ggplot2 graphics)
+#  - cmake: build tool for source packages like fs (pulled in by primer.tutorials)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libgdal-dev \
         libproj-dev \
@@ -32,6 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libfontconfig1-dev \
         libharfbuzz-dev \
         libfribidi-dev \
+        cmake \
     && rm -rf /var/lib/apt/lists/*
 
 # GitHub CLI. Official install method per the gh docs.
