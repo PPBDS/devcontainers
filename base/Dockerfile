@@ -21,15 +21,19 @@ ARG CODEX_VERSION=0.141.0
 
 # System libraries needed by both downstream images.
 #  - Geospatial: sf, terra, etc.
-#  - libnode-dev: satisfies the V8 R package (used by katex, gt)
 #  - text shaping libs: ragg / textshaping (modern ggplot2 graphics)
 #  - cmake: build tool for source packages like fs (pulled in by primer.tutorials)
+# NOTE: libv8/libnode-dev is deliberately NOT installed here. The V8 R package
+# binary from Posit Package Manager is statically linked (bundled libv8) and
+# needs no system library, AND NodeSource's nodejs (installed below) ships
+# overlapping files that would remove a distro libnode-dev anyway. pak is told
+# the requirement is satisfied via the metadata-only libnode-dev-virtual package
+# further down — see that block for the full rationale.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libgdal-dev \
         libproj-dev \
         libgeos-dev \
         libudunits2-dev \
-        libnode-dev \
         libfontconfig1-dev \
         libharfbuzz-dev \
         libfribidi-dev \
@@ -72,6 +76,36 @@ RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash - \
         nodejs \
         pipx \
     && rm -rf /var/lib/apt/lists/*
+
+# Tell pak that the V8 R package's system requirement is satisfied. pak's
+# sysreqs database maps V8 to the Debian package "libnode-dev", but:
+#   (1) the V8 binary we get from Posit Package Manager is statically linked
+#       (bundled libv8) and needs no system library at all, and
+#   (2) NodeSource's nodejs (installed just above) ships overlapping files and
+#       removes any distro libnode-dev, so it can't be present anyway.
+# Without this, pak prints "✖ Missing 1 system package: libnode-dev" on every
+# student install that pulls in V8 (gt, primer.tutorials, …) — alarming noise
+# for beginners, even though nothing is actually missing. A metadata-only
+# package that Provides libnode-dev/libv8-dev satisfies pak's check the
+# canonical Debian way; it ships no files, so it coexists with NodeSource
+# nodejs. (Validated against student:0.6.1 to silence the message without
+# changing what is actually linked.) The trailing dpkg-query is a build-time
+# smoke test: fail the build if the Provides did not register.
+RUN mkdir -p /tmp/libnode-dev-virtual/DEBIAN \
+    && printf '%s\n' \
+        'Package: libnode-dev-virtual' \
+        'Version: 1.0' \
+        'Architecture: all' \
+        'Maintainer: PPBDS <noreply@ppbds.invalid>' \
+        'Provides: libnode-dev, libv8-dev' \
+        'Description: Virtual provide for libnode-dev / libv8-dev' \
+        ' The V8 R package ships a bundled static libv8 and needs no system' \
+        ' library; this satisfies pak sysreqs without NodeSource-conflicting pkgs.' \
+        > /tmp/libnode-dev-virtual/DEBIAN/control \
+    && dpkg-deb --build /tmp/libnode-dev-virtual /tmp/libnode-dev-virtual.deb \
+    && dpkg -i /tmp/libnode-dev-virtual.deb \
+    && rm -rf /tmp/libnode-dev-virtual /tmp/libnode-dev-virtual.deb \
+    && dpkg-query -W -f='${Provides}\n' libnode-dev-virtual | grep -q libnode-dev
 
 ENV PIPX_HOME=/opt/pipx \
     PIPX_BIN_DIR=/usr/local/bin
