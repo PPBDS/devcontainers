@@ -35,11 +35,16 @@ Contents:
 - Quarto, pinned via a build arg
 - `arf` (Rust-based R console), pinned via a build arg, installed under the `rstudio` user so it lives at `/home/rstudio/.cargo/bin/arf` — matches what consumer `devcontainer.json`s set as `r.rterm.linux`
 - `pak` and `httpgd` (R packages — fast parallel installer and graphics device, both used by every downstream image)
+- A shared **modeling stack** (`tidymodels` + engines), installed from the *current* P3M snapshot (overriding rocker's frozen one) so versions are recent enough for the CatBoost engine:
+  - `tidymodels`, plus the engine packages it does NOT bundle: `xgboost`, `lightgbm`, `randomForest`, `ranger`, `glmnet`
+  - `bonsai` — parsnip bridge for the `lightgbm` and `catboost` engines
+  - `catboost` (v1.2.10, pinned) — not on CRAN; installed from its `linux-x86_64` GitHub release binary via `remotes::install_url` with `--no-test-load` (so the end-to-end fit smoke test is the real verification). amd64-only image, so the x86_64 binary suffices.
+  - `brms` — Bayesian regression via Stan. Needs `BH`/`RcppEigen`/`RcppParallel` installed explicitly: rstan lists them as `LinkingTo`, but installing rstan as a *binary* skips them, yet Stan *model* compilation at runtime needs them. The brms smoke test compiles a model to verify this end to end.
 - Headless-container workarounds applicable to any consumer (Codespaces, local Docker, Gateway):
   - `/usr/local/bin/xdg-open` replaced with a no-op stub so tools that try to open a browser (e.g., `quarto publish`) do not error
   - `BROWSER=/usr/bin/true` set as `ENV` for tools that respect `$BROWSER`
 
-Do not install PPBDS-specific or course R packages here. Application package installation belongs in the downstream images so each can manage its own dependency surface. Only shared dev tooling (`pak`, `httpgd`) belongs in `base`.
+Do not install **PPBDS-specific / course** R packages here (e.g. `tutorial.helpers`, `primer.tutorials`) — those belong in the downstream images so each manages its own course-content surface. General-purpose, broadly-shared tooling *does* belong in `base`: the installer (`pak`), graphics device (`httpgd`), and the modeling stack above (`tidymodels`/engines/`catboost`/`brms`), which David chose to share across `dev` and `student` rather than duplicate. The line is course-specific vs general-purpose, not "only pak/httpgd."
 
 ### `dev/` — for working *on* PPBDS packages
 
