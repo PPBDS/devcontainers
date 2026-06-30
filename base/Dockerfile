@@ -165,6 +165,34 @@ RUN ln -s /home/rstudio/.cargo/bin/arf /usr/local/bin/arf \
 # so install once at the base layer.
 RUN R -q -e 'install.packages("pak", repos = sprintf("https://r-lib.github.io/p/pak/stable/%s/%s/%s", .Platform$pkgType, R.Version()$os, R.Version()$arch))'
 
+# tidymodels + a set of modeling engines, shared by dev and student. All of
+# these are pulled from the CURRENT P3M snapshot (overriding rocker's frozen
+# one) so we get versions recent enough for the CatBoost engine (parsnip
+# >= 1.4.0, bonsai >= 0.4.1) and current everything else. None of the engine
+# packages ship inside the tidymodels meta-package — parsnip only provides the
+# interface, so each backend is installed explicitly here:
+#   - tidymodels  : the modeling framework (parsnip/recipes/rsample/tune/yardstick/…)
+#   - bonsai      : parsnip bridge for the lightgbm AND catboost engines
+#   - xgboost, lightgbm, randomForest, ranger, glmnet : tree/regularized engines
+#   - brms        : Bayesian regression via Stan — heavy (pulls rstan/StanHeaders);
+#                   compiles models at runtime using the rocker C++ toolchain
+#   - BH, RcppEigen, RcppParallel : the Boost / Eigen / TBB C++ headers rstan
+#                   needs to COMPILE Stan models at runtime. rstan declares these
+#                   as LinkingTo, but installing rstan as a BINARY skips them
+#                   (LinkingTo is only needed to compile *against* a package, which
+#                   a prebuilt binary doesn't), so Stan model compilation fails
+#                   ("Boost not found" / "Eigen not found") without them. The brms
+#                   smoke test below catches exactly this.
+#   - remotes     : needed for the CatBoost URL install below
+# CatBoost is not on CRAN — install its pinned linux-x86_64 release binary via
+# remotes::install_url; the INSTALL_opts are what a clean binary install needs
+# (per the catboost docs / the 2026-06 Posit tidymodels+catboost blog). The image
+# is amd64-only (build.yml sets no platforms), so the x86_64 binary suffices. The
+# end-to-end fit smoke test near the bottom proves the engine actually works —
+# important, since we install it with --no-test-load.
+RUN R -q -e 'options(repos = c(P3M = "https://packagemanager.posit.co/cran/__linux__/noble/latest")); pak::pkg_install(c("tidymodels", "bonsai", "remotes", "xgboost", "lightgbm", "randomForest", "ranger", "glmnet", "brms", "BH", "RcppEigen", "RcppParallel"))' \
+ && R -q -e 'remotes::install_url("https://github.com/catboost/catboost/releases/download/v1.2.10/catboost-R-linux-x86_64-1.2.10.tgz", INSTALL_opts = c("--no-multiarch", "--no-test-load", "--no-staged-install"))'
+
 # httpgd (graphics device for the VS Code R extension) is intentionally
 # NOT installed here: the rocker devcontainer base already bakes it in via
 # its r-packages feature ("packages": "httpgd"), so a second install was
@@ -191,6 +219,20 @@ RUN chmod -R g+w /usr/local/lib/R/site-library
 # binary-ABI mismatches at build time instead of at Codespace-launch time.
 # --vanilla skips Rprofile so this isolates the package-load path itself.
 RUN R --vanilla -e 'for (p in c("pak", "httpgd")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)'
+
+# Modeling smoke test 1: tidymodels, bonsai, every engine, and brms must load.
+RUN R --vanilla -e 'for (p in c("tidymodels", "bonsai", "xgboost", "lightgbm", "randomForest", "ranger", "glmnet", "brms", "catboost")) if (!requireNamespace(p, quietly = TRUE)) stop("modeling smoke test failed to load: ", p)'
+
+# Modeling smoke test 2: CatBoost end-to-end THROUGH tidymodels/bonsai — fit a
+# tiny model and predict, not just load the package. Since catboost is installed
+# with --no-test-load, this is the real proof the binary + engine binding work.
+RUN R --vanilla -e 'suppressPackageStartupMessages({library(tidymodels); library(bonsai)}); m <- boost_tree(trees = 5, mode = "regression") |> set_engine("catboost") |> fit(mpg ~ ., data = mtcars); stopifnot(nrow(predict(m, mtcars)) == nrow(mtcars)); cat("catboost + bonsai end-to-end OK\n")'
+
+# Modeling smoke test 3: brms end-to-end — fit a trivial model so the build
+# actually COMPILES a Stan program with the image's toolchain. A load check
+# wouldn't catch a broken Stan/compiler config; this does. chains/iter are tiny
+# since we only care that compilation + sampling run, not about the estimates.
+RUN R --vanilla -e 'fit <- brms::brm(mpg ~ wt, data = mtcars, chains = 1, iter = 100, refresh = 0, silent = 2); stopifnot(inherits(fit, "brmsfit")); cat("brms + Stan end-to-end OK\n")'
 
 # CLI smoke test: every shell tool must be on PATH and runnable.
 RUN claude --version && codex --version && agy --version && aider --version
