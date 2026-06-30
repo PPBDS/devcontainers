@@ -23,8 +23,9 @@ Contents:
 - `ghcr.io/rocker-org/devcontainer/tidyverse` as the FROM line — rocker's devcontainer-flavored tidyverse image. Pinned by SHA digest (the `:4.5` tag floats as Rocker patches the image; the digest freezes us at a known build). Bumping the digest is a deliberate commit.
 - System libraries needed by both downstream images:
   - Geospatial: `libgdal-dev`, `libproj-dev`, `libgeos-dev`, `libudunits2-dev`
-  - V8 (for `katex`, `V8`): `libnode-dev`
   - Text shaping for `ragg`/`textshaping`: `libfontconfig1-dev`, `libharfbuzz-dev`, `libfribidi-dev`
+  - `cmake` — build tool for source packages like `fs` (pulled in by `primer.tutorials`)
+- The `V8` R package needs **no** system lib here — its Posit Package Manager binary is statically linked (bundled libv8). `libnode-dev` is deliberately *not* installed (NodeSource `nodejs`, installed for the npm CLIs, removes any distro `libnode-dev` anyway). A metadata-only `libnode-dev-virtual` package (`Provides: libnode-dev, libv8-dev`, ships no files) satisfies pak's sysreqs check so it doesn't print a phantom "✖ Missing 1 system package: libnode-dev" on every student install that pulls in V8. See the block in `base/Dockerfile`. Relatedly, the `student` image sets `ENV PKG_SYSREQS=false` so pak never tries to `sudo apt` sysreqs at runtime (the non-root user can't), relying on what `base` bakes.
 - GitHub CLI (`gh`), installed from the official apt repo
 - AI coding-assistant CLIs (course-required tools — the image ships no credentials and is inert until each tool has either an account sign-in or an API key). The recommended path is account sign-in on first run; API keys via Codespaces user secrets (https://github.com/settings/codespaces) are the fallback. Pinned via build args and bumped deliberately, except `agy` (see below):
   - `claude` (Claude Code) — Anthropic. Sign in with a Claude plan, or `ANTHROPIC_API_KEY`.
@@ -54,7 +55,7 @@ Does NOT include:
 - The `vscode-r-tutorials` extension (developers write tutorials, they don't run them through the extension)
 - Pre-installed PPBDS tutorial packages (developers work from source)
 
-This is the image that PPBDS package repos (tutorial.helpers, positron.tutorials, primer, ai.tutorials, etc.) reference in their `.devcontainer/devcontainer.json`.
+This image is *intended* as the standard devcontainer for developing PPBDS packages. Adoption is partial: as of 2026-06, **`PPBDS/primer` is the only package repo that actually references it** (and on `dev:latest`, not a pinned tag). Others (`tutorial.helpers`, `ai.tutorials`, `vscode.tutorials`, `misc.tutorials`) have no `.devcontainer/devcontainer.json` pointing here yet. Don't repeat the old aspiration as if it were current fact — verify with code search before claiming consumers.
 
 ### `student/` — for taking the class
 
@@ -107,9 +108,41 @@ When changing the base image, expect both `dev` and `student` to rebuild. Verify
 
 Each Dockerfile ends with a smoke test (`R --vanilla -e 'requireNamespace(...)'` over its baked-in packages). The build fails if any package can't load. This catches binary-ABI mismatches (the `learnr`/`xfun` failure mode that bit us during initial build-out) at build time rather than letting them surface as a Codespace launch failure. Keep the smoke tests up to date when adding or removing packages.
 
+## Release & rollout runbook
+
+The steps to take when changing this infrastructure. `devcontainers` (this repo) and `codespace-starter` are kept **separate on purpose** (release-tag cleanliness + blast-radius isolation: a bad image push can't break student launches until the pin is bumped). That separation means a coordinated change is two PRs across two repos — these are the steps.
+
+### Step 0 — does the change need a new image release?
+
+- **YES — image content changed:** any `Dockerfile`, `student/requirements.txt`/`.lock`, baked packages, or system libs. → Do **A** then **B** below.
+- **NO — `codespace-starter` launcher-only:** its `devcontainer.json` VS Code `settings`/`extensions`/comments, `connect-repo.sh`, `welcome.sh`, or docs. → Skip **A**. Just merge to `codespace-starter` `main`; the Codespaces prebuild refreshes automatically. No image bump, no version change. (Example: the `r.source.echo` setting, the `PKG_SYSREQS` comment fix.)
+
+### A — cut an image release (in `devcontainers`)
+
+1. Branch off `main`.
+2. Make the change. Update the matching **smoke test** and **this CLAUDE.md** if the package/lib set changed.
+3. **Validate before merging:** `gh workflow run build.yml --ref <branch>`, then watch it green. This catches build + sysreqs failures *before* a release tag exists. The `student` build is heavy (source-builds `primer.*`, ~4.6 GB) — allow ~20 min. To introspect a published image cheaply (e.g. "is X actually installed?"), push a throwaway **push-triggered** workflow that does `docker run <image> …` or `FROM <image> … RUN …`, read the log, then delete the branch. (We did exactly this to root-cause the `libnode-dev` phantom.)
+4. PR → `gh pr merge --merge --delete-branch` → sync `main`.
+5. Pick the version (semver): **patch** `Z` for fixes / no new content; **minor** `Y` for new packages or features; **major** for a breaking `base` change. `main` is allowed to sit ahead of the latest tag — pure doc/no-op changes can ride with the next real release rather than forcing one.
+6. `gh release create vX.Y.Z --target main` → this triggers `build.yml` on the tag, publishing `base`/`dev`/`student:X.Y.Z` and moving `:X.Y`.
+7. Watch the tag build green and **confirm `student:X.Y.Z` is on GHCR** before repinning (query the GHCR manifest, don't assume).
+
+### B — roll it out to students (in `codespace-starter`)
+
+8. Branch; bump the `"image": "…/student:X.Y.Z"` pin **and** the "pinned to vX.Y.Z" comment; fold any related comment/`postCreateCommand` edits into the same PR.
+9. PR → merge → sync `main`.
+10. Watch the **Codespaces prebuild** — the Actions run named `.devcontainer/devcontainer.json` — go green. That's what makes new launches fast on the new image.
+11. Ask the user to verify in a **fresh** Codespace. (An already-open Codespace won't pick up `devcontainer.json` changes from a `git pull` — it needs *Dev Containers: Rebuild Container*. The prebuild only affects startup *speed*, not whether a setting/pin is present.)
+
+### Conventions
+
+- Commit trailer on every commit: `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
+- Never pin student-facing config to `:latest`.
+- Report build/prebuild results honestly (status + conclusion), and clean up throwaway diagnostic branches/workflows when done.
+
 ## Relationship to other PPBDS repos
 
-- **PPBDS package repos** (tutorial.helpers, positron.tutorials, primer, ai.tutorials, etc.): each *should* contain a `.devcontainer/devcontainer.json` of roughly five lines, referencing `ghcr.io/ppbds/devcontainers/dev:<tag>`. Per-repo customization (extra VS Code extensions, postCreate hooks specific to that package) goes in that file, not in the dev image. Migration to this image is in progress; not all repos have switched yet. (Note: `PPBDS/vscode-r-tutorials` is a TypeScript VS Code extension repo, not an R package — it has different devcontainer needs and is not a consumer of `dev`.)
+- **PPBDS package repos** (tutorial.helpers, primer, ai.tutorials, etc.): the *intent* is that each contains a short `.devcontainer/devcontainer.json` referencing `ghcr.io/ppbds/devcontainers/dev:<tag>`, with per-repo customization (extra extensions, package-specific postCreate hooks) in that file rather than the dev image. **Current reality (verified 2026-06): only `PPBDS/primer` does, on `dev:latest`.** The rest haven't adopted it. So `dev` is a real but barely-used image — treat "the org depends on it" as aspirational, not load-bearing. (Note: `PPBDS/vscode-r-tutorials` is a TypeScript VS Code extension repo, not an R package — different devcontainer needs, not a consumer of `dev`.)
 
 - **`PPBDS/codespace-starter`**: the repo students launch their Codespace from. Its `.devcontainer/devcontainer.json` references `ghcr.io/ppbds/devcontainers/student:X.Y.Z` (a specific semver tag). Students launch a Codespace on `codespace-starter` itself, then run its `connect-repo.sh` to create and clone a separate personal work repo where they save their work.
 
