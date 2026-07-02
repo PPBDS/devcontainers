@@ -75,6 +75,17 @@ RUN R --vanilla -e 'install.packages("praise", repos = "https://cloud.r-project.
 RUN R -q -e 'pak::pkg_install(c("plotly", "leaflet", "DT", "crosstalk", "shiny", "shinylive"))' \
     && R --vanilla -e 'for (p in c("plotly","leaflet","DT","crosstalk","shiny","shinylive")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)'
 
+# Mapping / census stack — NYT-style tract maps (dot-density, choropleths):
+# sf (vector geodata; links against the GDAL/PROJ/GEOS/udunits system libs that
+# base bakes for exactly this) and tidycensus (ACS/decennial data + geometry in
+# one call; pulls in tigris for TIGER shapefiles). Students need a free Census
+# API key for live tidycensus queries. P3M Linux binaries, so this is fast.
+# The interactive path needs nothing more: leaflet (above) draws sf objects,
+# and free CARTO basemap tiles substitute for Mapbox.
+RUN R -q -e 'pak::pkg_install(c("sf", "tidycensus"))' \
+    && R --vanilla -e 'for (p in c("sf","tidycensus","tigris")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)' \
+    && R --vanilla -e 'library(sf); p <- st_sfc(st_polygon(list(rbind(c(0,0), c(1,0), c(1,1), c(0,1), c(0,0)))), crs = 4326); pts <- st_sample(p, 10); stopifnot(length(pts) == 10); cat("sf geometry ops OK\n")'
+
 USER root
 
 # ── Python data-science stack ────────────────────────────────────────────────
