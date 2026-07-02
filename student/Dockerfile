@@ -82,8 +82,18 @@ RUN R -q -e 'pak::pkg_install(c("plotly", "leaflet", "DT", "crosstalk", "shiny",
 # API key for live tidycensus queries. P3M Linux binaries, so this is fast.
 # The interactive path needs nothing more: leaflet (above) draws sf objects,
 # and free CARTO basemap tiles substitute for Mapbox.
-RUN R -q -e 'pak::pkg_install(c("sf", "tidycensus"))' \
-    && R --vanilla -e 'for (p in c("sf","tidycensus","tigris")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)' \
+#
+# Plus the rest of the Kyle Walker toolkit:
+#  - mapgl:     MapLibre/Mapbox GL htmlwidgets — WebGL vector maps (the NYT
+#               look) with NO token via maplibre() + CARTO styles; publishes
+#               static to GitHub Pages like every other htmlwidget here.
+#  - crsuggest: suggests the right projected CRS for a dataset — the one-
+#               function answer to the #1 beginner mapping confusion.
+#  - idbr:      Census International Data Base (population pyramids, country
+#               time series); uses the same Census API key as tidycensus.
+# Deliberately NOT mapboxapi: it requires a per-student Mapbox account/token.
+RUN R -q -e 'pak::pkg_install(c("sf", "tidycensus", "mapgl", "crsuggest", "idbr"))' \
+    && R --vanilla -e 'for (p in c("sf","tidycensus","tigris","mapgl","crsuggest","idbr")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)' \
     && R --vanilla -e 'library(sf); p <- st_sfc(st_polygon(list(rbind(c(0,0), c(1,0), c(1,1), c(0,1), c(0,0)))), crs = 4326); pts <- st_sample(p, 10); stopifnot(length(pts) == 10); cat("sf geometry ops OK\n")'
 
 USER root
