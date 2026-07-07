@@ -1,0 +1,6 @@
+# Build context is the repo root; only the Dockerfile and the two
+# requirements files matter to the build. Keep the context tiny.
+*
+!Dockerfile
+!requirements.txt
+!requirements.lock
