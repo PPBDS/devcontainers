@@ -40,6 +40,7 @@ Contents:
   - `bonsai` — parsnip bridge for the `lightgbm` and `catboost` engines
   - `catboost` (v1.2.10, pinned) — not on CRAN; installed from its `linux-x86_64` GitHub release binary via `remotes::install_url` with `--no-test-load` (so the end-to-end fit smoke test is the real verification). amd64-only image, so the x86_64 binary suffices.
   - `brms` — Bayesian regression via Stan. Needs `BH`/`RcppEigen`/`RcppParallel` installed explicitly: rstan lists them as `LinkingTo`, but installing rstan as a *binary* skips them, yet Stan *model* compilation at runtime needs them. The brms smoke test compiles a model to verify this end to end.
+- An **inference-reporting + presentation set**: `gt` (tables), `marginaleffects` (post-estimation predictions/comparisons/slopes), `patchwork` (ggplot composition), `easystats` (parameters/performance/effectsize meta-package). All four are used pervasively in both PPBDS/primer's `book/` and its tutorials (audited 2026-07) but were previously either absent (only `Suggests` in primer.tutorials, which pak doesn't install) or present only transitively (`gt` via primer.tutorials' Imports). General-purpose, hence base rather than student.
 - Headless-container workarounds applicable to any consumer (Codespaces, local Docker, Gateway):
   - `/usr/local/bin/xdg-open` replaced with a no-op stub so tools that try to open a browser (e.g., `quarto publish`) do not error
   - `BROWSER=/usr/bin/true` set as `ENV` for tools that respect `$BROWSER`
@@ -129,7 +130,7 @@ The steps to take when changing this infrastructure. `devcontainers` (this repo)
 2. Make the change. Update the matching **smoke test** and **this CLAUDE.md** if the package/lib set changed.
 3. **Validate before merging:** `gh workflow run build.yml --ref <branch>`, then watch it green. This catches build + sysreqs failures *before* a release tag exists. The `student` build is heavy (source-builds `primer.*`, ~4.6 GB) — allow ~20 min. To introspect a published image cheaply (e.g. "is X actually installed?"), push a throwaway **push-triggered** workflow that does `docker run <image> …` or `FROM <image> … RUN …`, read the log, then delete the branch. (We did exactly this to root-cause the `libnode-dev` phantom.)
 4. PR → `gh pr merge --merge --delete-branch` → sync `main`.
-5. Pick the version (semver): **patch** `Z` for fixes / no new content; **minor** `Y` for new packages or features; **major** for a breaking `base` change. `main` is allowed to sit ahead of the latest tag — pure doc/no-op changes can ride with the next real release rather than forcing one.
+5. Pick the version: **increment only the last digit** (`Z`), whatever the change — new packages included (David's rule, 2026-07: e.g. 0.9.0 → 0.9.1). Bump `Y` or the major **only when David explicitly asks for it**. `main` is allowed to sit ahead of the latest tag — pure doc/no-op changes can ride with the next real release rather than forcing one.
 6. `gh release create vX.Y.Z --target main` → this triggers `build.yml` on the tag, publishing `base`/`dev`/`student:X.Y.Z` and moving `:X.Y`.
 7. Watch the tag build green and **confirm `student:X.Y.Z` is on GHCR** before repinning (query the GHCR manifest, don't assume).
 

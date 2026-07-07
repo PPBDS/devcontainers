@@ -23,6 +23,11 @@ ARG CODEX_VERSION=0.141.0
 #  - Geospatial: sf, terra, etc.
 #  - text shaping libs: ragg / textshaping (modern ggplot2 graphics)
 #  - cmake: build tool for source packages like fs (pulled in by primer.tutorials)
+#  - libuv1-dev: fs >= 2.1.0 declares libuv as a sysreq. The P3M binary works
+#    without it, but pak prints a phantom "✖ Missing 1 system package:
+#    libuv1-dev" on every install that touches fs (i.e. nearly all of them) —
+#    same annoyance class as the libnode-dev story below, solved here by just
+#    baking the real (small) lib.
 # NOTE: libv8/libnode-dev is deliberately NOT installed here. The V8 R package
 # binary from Posit Package Manager is statically linked (bundled libv8) and
 # needs no system library, AND NodeSource's nodejs (installed below) ships
@@ -38,6 +43,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libharfbuzz-dev \
         libfribidi-dev \
         cmake \
+        libuv1-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # GitHub CLI. Official install method per the gh docs.
@@ -193,6 +199,21 @@ RUN R -q -e 'install.packages("pak", repos = sprintf("https://r-lib.github.io/p/
 RUN R -q -e 'options(repos = c(P3M = "https://packagemanager.posit.co/cran/__linux__/noble/latest")); pak::pkg_install(c("tidymodels", "bonsai", "remotes", "xgboost", "lightgbm", "randomForest", "ranger", "glmnet", "brms", "BH", "RcppEigen", "RcppParallel"))' \
  && R -q -e 'remotes::install_url("https://github.com/catboost/catboost/releases/download/v1.2.10/catboost-R-linux-x86_64-1.2.10.tgz", INSTALL_opts = c("--no-multiarch", "--no-test-load", "--no-staged-install"))'
 
+# Inference-reporting + presentation packages, shared by dev and student.
+# These are used pervasively in BOTH PPBDS/primer's book/ and its tutorials
+# (audited 2026-07), but pak never installed them because primer.tutorials
+# only lists them as Suggests — students hit an install wall at the first
+# library() call. General-purpose (not course-specific), so they belong here:
+#   - gt              : presentation-quality tables (1,100+ gt:: calls in the
+#                       book; was previously present only transitively via
+#                       primer.tutorials' Imports — now a deliberate choice)
+#   - marginaleffects : predictions/comparisons/slopes from fitted models —
+#                       the book's standard post-estimation workflow
+#   - patchwork       : ggplot composition ("p1 + p2")
+#   - easystats       : meta-package (parameters/performance/effectsize/see/…)
+#                       used across the tutorials
+RUN R -q -e 'options(repos = c(P3M = "https://packagemanager.posit.co/cran/__linux__/noble/latest")); pak::pkg_install(c("gt", "marginaleffects", "patchwork", "easystats"))'
+
 # httpgd (graphics device for the VS Code R extension) is intentionally
 # NOT installed here: the rocker devcontainer base already bakes it in via
 # its r-packages feature ("packages": "httpgd"), so a second install was
@@ -213,7 +234,19 @@ ENV BROWSER=/usr/bin/true
 # of group-writable site-library so the runtime user (rstudio, in staff
 # group) can install/update packages — and so package-load paths that
 # touch lock files or caches don't trip permission errors.
-RUN chmod -R g+w /usr/local/lib/R/site-library
+#
+# Two hardenings, both for the same failure class (a root pak run poisons
+# the library for later non-root installs; see the student Dockerfile's
+# rstudio-user rationale):
+#  - rm -rf _cache: pkgdepends locks site-library/_cache/<pkg>.lock during
+#    installs. Locks created by ROOT here are group-unreadable (root's
+#    umask), and a downstream rstudio-user pak run then dies with
+#    "filelock::lock(): Cannot open lock file: Permission denied" — this
+#    broke the student build (2026-07). The dir is pure scratch; delete it.
+#  - g+rwX (not just g+w): write alone leaves group-READ missing on any
+#    file root created without it, and no traverse on such dirs.
+RUN rm -rf /usr/local/lib/R/site-library/_cache \
+    && chmod -R g+rwX /usr/local/lib/R/site-library
 
 # R smoke test: every baked-in package must actually load. Catches
 # binary-ABI mismatches at build time instead of at Codespace-launch time.
@@ -222,6 +255,9 @@ RUN R --vanilla -e 'for (p in c("pak", "httpgd")) if (!requireNamespace(p, quiet
 
 # Modeling smoke test 1: tidymodels, bonsai, every engine, and brms must load.
 RUN R --vanilla -e 'for (p in c("tidymodels", "bonsai", "xgboost", "lightgbm", "randomForest", "ranger", "glmnet", "brms", "catboost")) if (!requireNamespace(p, quietly = TRUE)) stop("modeling smoke test failed to load: ", p)'
+
+# Inference/presentation smoke test: the primer book+tutorial packages must load.
+RUN R --vanilla -e 'for (p in c("gt", "marginaleffects", "patchwork", "easystats")) if (!requireNamespace(p, quietly = TRUE)) stop("inference/presentation smoke test failed to load: ", p)'
 
 # Modeling smoke test 2: CatBoost end-to-end THROUGH tidymodels/bonsai — fit a
 # tiny model and predict, not just load the package. Since catboost is installed
