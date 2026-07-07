@@ -1,14 +1,12 @@
-# PPBDS devcontainers
+# PPBDS devcontainer
 
-Container infrastructure for the PPBDS GitHub organization. This repo publishes three Docker images to the GitHub Container Registry (GHCR); other PPBDS repos consume them via short `devcontainer.json` files.
+Container infrastructure for the PPBDS GitHub organization. This repo publishes **one Docker image** to the GitHub Container Registry:
 
-## Images
+    ghcr.io/ppbds/devcontainer
 
-| Image | Audience | Built from |
-|---|---|---|
-| `ghcr.io/ppbds/devcontainers/base`    | shared substrate (don't consume directly) | `rocker-org/devcontainer/tidyverse` |
-| `ghcr.io/ppbds/devcontainers/dev`     | developing PPBDS R packages               | `base` |
-| `ghcr.io/ppbds/devcontainers/student` | taking the data science course            | `base` |
+It serves everyone: students taking the data science course (via [codespace-starter](https://github.com/PPBDS/codespace-starter)) and developers working on PPBDS packages.
+
+> **Note:** this image replaced the old `devcontainers/base`, `devcontainers/dev`, and `devcontainers/student` trio in v1.0.0. The old packages remain on GHCR at their final tags so existing pins keep working, but they receive no new versions — switch to `ghcr.io/ppbds/devcontainer`.
 
 ## Consuming
 
@@ -16,45 +14,43 @@ In a downstream repo's `.devcontainer/devcontainer.json`:
 
 ```jsonc
 {
-  "image": "ghcr.io/ppbds/devcontainers/dev:X.Y.Z"
+  "image": "ghcr.io/ppbds/devcontainer:X.Y.Z"
 }
 ```
 
-Replace `X.Y.Z` with the latest tag from the [releases page](https://github.com/PPBDS/devcontainers/releases). Pin to a specific semver tag for stability — `:latest` floats with `main` and is fine for development but not for student-facing repos.
+Replace `X.Y.Z` with the latest tag from the [releases page](https://github.com/PPBDS/devcontainers/releases). Pin to a specific semver tag — `:latest` floats with `main` and is not for student-facing (or, since 2026-07, package-repo) config.
 
 ## Tag families
 
 - `:latest` — most recent successful build from `main`. Convenient, not stable.
-- `:X.Y.Z` and `:X.Y` — semver tags from a GitHub release on this repo. The canonical stable pin. `codespace-starter` pins to a specific `:X.Y.Z` and bumps it deliberately.
+- `:X.Y.Z` and `:X.Y` — semver tags from a GitHub release on this repo. The canonical stable pin.
 
-## Data-science tooling (student image)
+## What's inside
 
-The `student` image carries both languages students use:
-
-- **R** — the rocker/tidyverse foundation, plus the PPBDS course packages (`tutorial.helpers`, `vscode.tutorials`, `misc.tutorials`, `primer.tutorials`), the `arf` console, Quarto, and `httpgd`.
-- **Python** — a basic data-science stack installed with [`uv`](https://docs.astral.sh/uv/) into `/opt/venv` from a pinned lockfile (`student/requirements.lock`): numpy, pandas, matplotlib, seaborn, scikit-learn, statsmodels, jupyter, ipykernel. It's the default `python` on `PATH`, with a registered Jupyter kernel — so students can use Python in VS Code notebooks or in Quarto `.qmd` chunks (Quarto runs Python via the jupyter engine; no reticulate needed). The venv is group-writable, so students can `pip install` more packages.
-- **Observable** — Quarto's `{ojs}` cells render interactive [Observable Plot](https://observablehq.com/plot/) / OJS in `.qmd` documents out of the box (no install); plus the [Observable Framework](https://observablehq.com/framework/) CLI (`observable`) for building standalone data-app projects.
-- **Mapping / census** — `sf` + `tidycensus` (with `tigris`) for census-tract maps: pull ACS data and geometry in one call, render static maps with `ggplot2` or interactive ones with `leaflet` over free CARTO basemap tiles (no Mapbox token). Plus the rest of the [Kyle Walker](https://walker-data.com) toolkit: `mapgl` (WebGL vector maps via MapLibre — token-free with `maplibre()` + CARTO styles), `crsuggest` (pick the right CRS), and `idbr` (international Census data). Live census queries need a [free Census API key](https://api.census.gov/data/key_signup.html).
-- **Interactive web viz + Shinylive** — for fancy interactive sites on static hosting: R htmlwidgets (`plotly`, `leaflet`, `DT`, `crosstalk`) and Python (`plotly`, `altair`, `folium`, `itables`) emit self-contained client-side JS; **Shinylive** (`shiny` + `shinylive`, R & Python) runs Shiny apps as WebAssembly, so they too deploy to GitHub Pages with no server.
-
-Both are baked into the image, so they cost ~nothing at Codespace-creation time (the prebuild restores them).
+- **R** — the rocker/tidyverse foundation, the PPBDS course packages (`tutorial.helpers`, `vscode.tutorials`, `misc.tutorials`, `primer.tutorials`), the `arf` console, Quarto, `httpgd`, and `pak`.
+- **Modeling** — `tidymodels` plus engines (`xgboost`, `lightgbm`, `catboost`, `randomForest`, `ranger`, `glmnet`, `bonsai`) and `brms` for Bayesian regression via Stan.
+- **Inference reporting & presentation** — `gt`, `marginaleffects`, `patchwork`, `easystats` (used throughout the primer book and tutorials).
+- **Mapping / census** — `sf` + `tidycensus` (with `tigris`) for census-tract maps, plus the [Kyle Walker](https://walker-data.com) toolkit: `mapgl` (token-free WebGL vector maps via MapLibre + CARTO styles), `crsuggest`, and `idbr`. Live census queries need a [free Census API key](https://api.census.gov/data/key_signup.html).
+- **Interactive web viz + Shinylive** — R htmlwidgets (`plotly`, `leaflet`, `DT`, `crosstalk`) and Python (`plotly`, `altair`, `folium`, `itables`) emit self-contained client-side JS; **Shinylive** (R & Python) runs Shiny apps as WebAssembly — everything publishes to static hosting (GitHub Pages).
+- **Python** — a data-science stack installed with [`uv`](https://docs.astral.sh/uv/) into `/opt/venv` from a pinned lockfile: numpy, pandas, matplotlib, seaborn, scikit-learn, statsmodels, jupyter, ipykernel. Default `python` on `PATH`, registered Jupyter kernel, group-writable so `pip install` works.
+- **Observable** — Quarto's `{ojs}` cells render Observable Plot / OJS out of the box; the [Observable Framework](https://observablehq.com/framework/) CLI is installed for standalone data-app projects.
+- **Package development** — `devtools`, `pkgdown`, `roxygen2`, `testthat`, `usethis`, and the R CMD check toolchain (incl. `qpdf`).
+- **AI coding assistants** — see below.
 
 ## AI coding assistants
 
-The `base` image (and therefore `dev` and `student`) ships four AI coding CLIs so that students and developers can pick the model that fits their cost and quality needs:
+The image ships four AI coding CLIs so users can pick the model that fits their cost and quality needs:
 
 - **`claude`** — [Claude Code](https://docs.anthropic.com/claude-code). Anthropic's CLI, single-provider, uses Claude models. Highest quality, highest cost.
 - **`codex`** — [Codex CLI](https://developers.openai.com/codex/cli). OpenAI's CLI, uses GPT/Codex models. Included with a ChatGPT Plus/Pro plan.
 - **`agy`** — [Antigravity CLI](https://antigravity.google/docs/cli-overview). Google's terminal coding agent — the successor to the Gemini CLI, which Google [retired on 2026-06-18](https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/).
 - **`aider`** — [Aider](https://aider.chat). Multi-provider. Point it at DeepSeek, OpenRouter, OpenAI, Anthropic, or any OpenAI-compatible endpoint. The cost-flexible option.
 
-The images ship **no credentials**. The recommended way to authenticate is to **sign in on first run**: start the CLI and complete the account sign-in (a ChatGPT plan for `codex`, a Claude plan for `claude`, a Google account for `agy`). This bills against a flat-rate subscription rather than metered API calls. As a fallback — and the only option for `aider` — supply an API key via Codespaces user secrets (below); each CLI stays inert until it has either a sign-in or a key.
+The image ships **no credentials**. The recommended way to authenticate is to **sign in on first run**: start the CLI and complete the account sign-in (a ChatGPT plan for `codex`, a Claude plan for `claude`, a Google account for `agy`). This bills against a flat-rate subscription rather than metered API calls. As a fallback — and the only option for `aider` — supply an API key via Codespaces user secrets (below); each CLI stays inert until it has either a sign-in or a key.
 
 ### Setting up API keys (the fallback path, per-user, one-time)
 
-API keys are the **fallback** for students who prefer metered billing or who use `aider` (which is key-only). If you sign in to `claude`/`codex`/`agy` with an account instead, you need none of the keys below.
-
-Configure each key as a personal Codespaces secret so it appears as an environment variable in every Codespace you launch — no need to re-enter it for each new Codespace.
+Configure each key as a personal Codespaces secret so it appears as an environment variable in every Codespace you launch.
 
 1. Go to **https://github.com/settings/codespaces**.
 2. Under **Codespaces secrets**, click **New secret**.
@@ -70,22 +66,16 @@ Configure each key as a personal Codespaces secret so it appears as an environme
 
    (`codex` authenticates by signing in with a ChatGPT plan, or via `codex login`; it does not read `OPENAI_API_KEY`.)
 
-4. Under **Repository access**, grant access to the repos you launch Codespaces from (typically `PPBDS/codespace-starter` itself, and any other repo you open Codespaces on).
-5. Save. The next Codespace you launch will have those env vars available, and the CLIs will pick them up automatically.
-
-You only need to set up the keys for the tools you actually plan to use. Most students set one of (`DEEPSEEK_API_KEY` or `OPENROUTER_API_KEY`) plus optionally `ANTHROPIC_API_KEY` for higher-quality work when needed.
+4. Under **Repository access**, grant access to the repos you launch Codespaces from.
+5. Save. The next Codespace you launch will have those env vars available.
 
 ### Using cheaper models via Aider
 
-For cost-sensitive work, point Aider at a cheap model:
-
 ```bash
 # DeepSeek directly — typically ~$0.02–0.05 per 50K-token coding session
-export DEEPSEEK_API_KEY=...   # already set via Codespaces secret
 aider --model deepseek/deepseek-chat
 
 # Or via OpenRouter — one key, hundreds of models you can swap between
-export OPENROUTER_API_KEY=... # already set via Codespaces secret
 aider --model openrouter/deepseek/deepseek-chat
 aider --model openrouter/qwen/qwen-3-coder
 aider --model openrouter/google/gemini-2.5-flash
@@ -95,4 +85,4 @@ For frontier-quality answers on hard problems, use `claude` directly (charged at
 
 ## Architecture and design rationale
 
-See [CLAUDE.md](CLAUDE.md). It documents what goes in each image, why, and the conventions to follow when changing them.
+See [CLAUDE.md](CLAUDE.md) and the comments in the [Dockerfile](Dockerfile) — the Dockerfile comments are the canonical record of what's installed and why.
