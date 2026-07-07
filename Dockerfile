@@ -298,8 +298,11 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # create via codespace-starter's postCreateCommand; baking them here pre-
 # installs the whole dependency tree (so that refresh is a quick update, not
 # a cold build) and leaves a working fallback if GitHub is unreachable. Note
-# primer.tutorials lives in a SUBDIR of the primer repo, hence the
-# "PPBDS/primer/primer.tutorials" path. Add further "PPBDS/<name>" entries
+# primer.tutorials was SPLIT OUT of the primer repo (2026-07): as a subdir
+# install ("PPBDS/primer/primer.tutorials") every install downloaded the
+# full ~183 MB primer tarball — book, class exercises — to deliver a ~4 MB
+# package, at every image build AND every Codespace create. Do not point
+# this back at the subdir path. Add further "PPBDS/<name>" entries
 # (in BOTH places) when the syllabus needs them.
 #
 # upgrade = TRUE forces pak to pull the latest version of every
@@ -311,7 +314,7 @@ RUN R -q -e 'pak::pkg_install(c( \
         "PPBDS/tutorial.helpers", \
         "PPBDS/vscode.tutorials", \
         "PPBDS/misc.tutorials", \
-        "PPBDS/primer/primer.tutorials" \
+        "PPBDS/primer.tutorials" \
     ), upgrade = TRUE)'
 
 # Smoke test 1: every baked-in package and the learnr/knitr/rmarkdown
