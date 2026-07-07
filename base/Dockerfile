@@ -193,6 +193,21 @@ RUN R -q -e 'install.packages("pak", repos = sprintf("https://r-lib.github.io/p/
 RUN R -q -e 'options(repos = c(P3M = "https://packagemanager.posit.co/cran/__linux__/noble/latest")); pak::pkg_install(c("tidymodels", "bonsai", "remotes", "xgboost", "lightgbm", "randomForest", "ranger", "glmnet", "brms", "BH", "RcppEigen", "RcppParallel"))' \
  && R -q -e 'remotes::install_url("https://github.com/catboost/catboost/releases/download/v1.2.10/catboost-R-linux-x86_64-1.2.10.tgz", INSTALL_opts = c("--no-multiarch", "--no-test-load", "--no-staged-install"))'
 
+# Inference-reporting + presentation packages, shared by dev and student.
+# These are used pervasively in BOTH PPBDS/primer's book/ and its tutorials
+# (audited 2026-07), but pak never installed them because primer.tutorials
+# only lists them as Suggests — students hit an install wall at the first
+# library() call. General-purpose (not course-specific), so they belong here:
+#   - gt              : presentation-quality tables (1,100+ gt:: calls in the
+#                       book; was previously present only transitively via
+#                       primer.tutorials' Imports — now a deliberate choice)
+#   - marginaleffects : predictions/comparisons/slopes from fitted models —
+#                       the book's standard post-estimation workflow
+#   - patchwork       : ggplot composition ("p1 + p2")
+#   - easystats       : meta-package (parameters/performance/effectsize/see/…)
+#                       used across the tutorials
+RUN R -q -e 'options(repos = c(P3M = "https://packagemanager.posit.co/cran/__linux__/noble/latest")); pak::pkg_install(c("gt", "marginaleffects", "patchwork", "easystats"))'
+
 # httpgd (graphics device for the VS Code R extension) is intentionally
 # NOT installed here: the rocker devcontainer base already bakes it in via
 # its r-packages feature ("packages": "httpgd"), so a second install was
@@ -222,6 +237,9 @@ RUN R --vanilla -e 'for (p in c("pak", "httpgd")) if (!requireNamespace(p, quiet
 
 # Modeling smoke test 1: tidymodels, bonsai, every engine, and brms must load.
 RUN R --vanilla -e 'for (p in c("tidymodels", "bonsai", "xgboost", "lightgbm", "randomForest", "ranger", "glmnet", "brms", "catboost")) if (!requireNamespace(p, quietly = TRUE)) stop("modeling smoke test failed to load: ", p)'
+
+# Inference/presentation smoke test: the primer book+tutorial packages must load.
+RUN R --vanilla -e 'for (p in c("gt", "marginaleffects", "patchwork", "easystats")) if (!requireNamespace(p, quietly = TRUE)) stop("inference/presentation smoke test failed to load: ", p)'
 
 # Modeling smoke test 2: CatBoost end-to-end THROUGH tidymodels/bonsai — fit a
 # tiny model and predict, not just load the package. Since catboost is installed
