@@ -225,6 +225,47 @@ RUN R -q -e 'options(repos = c(P3M = "https://packagemanager.posit.co/cran/__lin
 #                       used across the tutorials
 RUN R -q -e 'options(repos = c(P3M = "https://packagemanager.posit.co/cran/__linux__/noble/latest")); pak::pkg_install(c("gt", "marginaleffects", "patchwork", "easystats"))'
 
+# Silence easystats' on-attach update nag. easystats' .onAttach queries CRAN
+# LIVE on every library(easystats) (up to a 10 s network wait) and prints a
+# red "✖ needs update / Restart the R-Session and update" banner whenever any
+# of its ten component packages is behind CRAN's newest SOURCE version. In an
+# immutable image built from P3M binaries (which lag CRAN by days, by design)
+# that banner is a permanent false alarm — same class as the libnode-dev
+# phantom — and it goads students into ad-hoc easystats_update() runs that
+# churn the baked library.
+#
+# TRAP (do not "simplify" this to EASYSTATS_QUIET=1): easystats' kill switch
+# returns from .onAttach BEFORE the code that attaches the ten component
+# packages (they are Imports, attached manually inside .onAttach). The env
+# var alone would silently stop library(easystats) from attaching
+# parameters/effectsize/…, breaking the tutorials' usage pattern. So we set
+# the quiet option AND register an attach hook that re-attaches the
+# components ourselves: same attach behavior, no banner, no CRAN round-trip.
+# Lives in Rprofile.site, so it applies to every non-vanilla R session (the
+# smoke test below runs WITHOUT --vanilla for exactly that reason).
+RUN cat >> /usr/local/lib/R/etc/Rprofile.site <<'EOF'
+
+# easystats: no on-attach CRAN check/update nag; keep component auto-attach.
+# See the easystats block in the PPBDS/devcontainers Dockerfile.
+options(easystats.quiet = TRUE)
+setHook(packageEvent("easystats", "attach"), function(pkgname, libpath) {
+  for (p in c("insight", "datawizard", "bayestestR", "correlation",
+              "effectsize", "modelbased", "parameters", "performance",
+              "report", "see")) {
+    suppressPackageStartupMessages(
+      library(p, character.only = TRUE, warn.conflicts = FALSE)
+    )
+  }
+})
+EOF
+
+# Smoke test: attaching easystats (site profile active, hence no --vanilla)
+# must attach the component packages and print NO update nag.
+RUN out="$(R -q -e 'library(easystats); stopifnot(all(paste0("package:", c("effectsize", "parameters", "performance", "see")) %in% search())); cat("easystats attach OK\n")' 2>&1)" \
+    && echo "$out" \
+    && echo "$out" | grep -q "easystats attach OK" \
+    && ! echo "$out" | grep -q "Restart the R-Session"
+
 # httpgd (graphics device for the VS Code R extension) is intentionally
 # NOT installed here: the rocker devcontainer base already bakes it in via
 # its r-packages feature ("packages": "httpgd"), so a second install was
