@@ -335,16 +335,18 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # the development version, not whatever an r-universe build cycle (or
 # CRAN) most recently blessed.
 #
-# These four are also refreshed to the latest commit on every Codespace
-# create via codespace-starter's postCreateCommand; baking them here pre-
-# installs the whole dependency tree (so that refresh is a quick update, not
-# a cold build) and leaves a working fallback if GitHub is unreachable. Note
-# primer.tutorials was SPLIT OUT of the primer repo (2026-07): as a subdir
-# install ("PPBDS/primer/primer.tutorials") every install downloaded the
-# full ~183 MB primer tarball — book, class exercises — to deliver a ~4 MB
-# package, at every image build AND every Codespace create. Do not point
-# this back at the subdir path. Add further "PPBDS/<name>" entries
-# (in BOTH places) when the syllabus needs them.
+# Of these four, ONLY primer.tutorials is also refreshed to latest on every
+# Codespace create, via codespace-starter's postCreateCommand (decided
+# 2026-07: course content there can change at the last minute; the other
+# three ship at whatever version this image baked, and updates to them reach
+# students via the next image release + pin bump). Baking primer.tutorials
+# here pre-installs its whole dependency tree (so that refresh is a quick
+# update, not a cold build) and leaves a working fallback if GitHub is
+# unreachable. Note primer.tutorials was SPLIT OUT of the primer repo
+# (2026-07): as a subdir install ("PPBDS/primer/primer.tutorials") every
+# install downloaded the full ~183 MB primer tarball — book, class
+# exercises — to deliver a ~4 MB package, at every image build AND every
+# Codespace create. Do not point this back at the subdir path.
 #
 # upgrade = TRUE forces pak to pull the latest version of every
 # transitive dep (learnr, knitr, rmarkdown, xfun, ...). Without this, a
