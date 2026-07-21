@@ -211,10 +211,13 @@ RUN R -q -e 'install.packages("pak", repos = sprintf("https://r-lib.github.io/p/
 RUN R -q -e 'options(repos = c(P3M = "https://packagemanager.posit.co/cran/__linux__/noble/latest")); pak::pkg_install(c("tidymodels", "bonsai", "remotes", "xgboost", "lightgbm", "randomForest", "ranger", "glmnet", "brms", "BH", "RcppEigen", "RcppParallel"))' \
  && R -q -e 'remotes::install_url("https://github.com/catboost/catboost/releases/download/v1.2.10/catboost-R-linux-x86_64-1.2.10.tgz", INSTALL_opts = c("--no-multiarch", "--no-test-load", "--no-staged-install"))'
 
-# Inference-reporting + presentation packages. These are used pervasively in
-# BOTH PPBDS/primer's book/ and its tutorials (audited 2026-07), but pak never
-# installed them because primer.tutorials only lists them as Suggests —
-# students hit an install wall at the first library() call:
+# Inference-reporting + presentation packages. Used pervasively in BOTH
+# PPBDS/primer's book/ and its tutorials (audited 2026-07). Since the
+# course-package install below moved to dependencies = TRUE (2026-07),
+# gt/marginaleffects/easystats also arrive via the tutorial packages'
+# Imports/Suggests; this explicit block stays for patchwork (book-only,
+# in no tutorial package's Suggests) and as belt-and-suspenders for the
+# rest:
 #   - gt              : presentation-quality tables (1,100+ gt:: calls in the
 #                       book; was previously present only transitively via
 #                       primer.tutorials' Imports — now a deliberate choice)
@@ -353,17 +356,34 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # binary dep built against a newer version of xfun than what rocker
 # shipped fails to load with "object 'attr' is not exported by
 # 'namespace:xfun'".
+#
+# dependencies = TRUE additionally installs each of the four packages'
+# Suggests (top-level only, not Suggests-of-Suggests). This is the
+# contract (2026-07): a tutorial package's Suggests list IS the set of
+# packages students need at tutorial runtime. Tutorials load them with
+# library() or reference them as tidymodels engine strings
+# (set_engine("LiblineaR")), so pak's hard-deps-only default left
+# students hitting install walls that those repos' all-Suggests CI
+# could not see (the katex incident, 2026-07). Keep Suggests curated
+# in those repos: every entry ships in this image. Smoke test 1b
+# below loads each one.
 RUN R -q -e 'pak::pkg_install(c( \
         "PPBDS/tutorial.helpers", \
         "PPBDS/vscode.tutorials", \
         "PPBDS/misc.tutorials", \
         "PPBDS/primer.tutorials" \
-    ), upgrade = TRUE)'
+    ), upgrade = TRUE, dependencies = TRUE)'
 
 # Smoke test 1: every baked-in package and the learnr/knitr/rmarkdown
 # chain must all load. The original learnr/xfun ABI mismatch failure
 # would have been caught here at build time.
 RUN R --vanilla -e 'for (p in c("tutorial.helpers", "vscode.tutorials", "misc.tutorials", "primer.tutorials", "learnr", "knitr", "rmarkdown")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)'
+
+# Smoke test 1b: every Suggests of the four course packages must load —
+# Suggests is the ships-to-students contract (see the install block
+# above). Reads the lists from the installed DESCRIPTIONs, so it
+# self-maintains as those repos curate their Suggests.
+RUN R --vanilla -e 'for (p in c("tutorial.helpers", "vscode.tutorials", "misc.tutorials", "primer.tutorials")) { s <- utils::packageDescription(p, fields = "Suggests"); if (is.na(s)) next; deps <- trimws(sub("[(].*", "", strsplit(s, ",")[[1]])); for (d in deps[nzchar(deps)]) if (!requireNamespace(d, quietly = TRUE)) stop("Suggests smoke test: ", d, " (suggested by ", p, ") failed to load") }'
 
 # Smoke test 2: rstudio can install a fresh package into site-library
 # without permission errors. Catches the "root-built image leaves
