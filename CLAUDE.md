@@ -82,10 +82,17 @@ The R version is encoded in the FROM line. We do not publish a separate `:r-4.5`
 
 ### B — roll it out (consumers)
 
+**The pin lives in FIVE places (2026-07). Bump them together, every release** — a lagging pin means that repo's CI validates against an image students no longer run:
+
+- `codespace-starter` → `.devcontainer/devcontainer.json` (the student launcher; its pin comment repeats this list).
+- `primer.tutorials`, `misc.tutorials`, `vscode.tutorials` → each pins the image in `.github/workflows/R-CMD-check.yaml`, in the `student-env-render` job that renders every tutorial inside this exact image.
+- `PPBDS/primer` → `.devcontainer/devcontainer.json` (only if its pin should move).
+
 8. `codespace-starter`: branch; bump the `"image"` pin **and** the "pinned to vX.Y.Z" comment; fold related comment/postCreateCommand edits into the same PR. PR → merge → sync.
-9. Watch the **Codespaces prebuild** — the Actions run named `.devcontainer/devcontainer.json` — go green. (Prebuild affects startup *speed* only; the pin is live on merge.)
-10. `PPBDS/primer` (only if its pin should move): same one-line bump.
-11. Ask the user to verify in a **fresh** Codespace. (An already-open Codespace won't pick up `devcontainer.json` changes from a `git pull` — it needs *Dev Containers: Rebuild Container*.)
+9. The three tutorial repos: bump the `image:` tag in each `student-env-render` job (one line per repo, direct to main is fine). Their next CI run then validates the tutorials against the new image.
+10. Watch the **Codespaces prebuild** — the Actions run named `.devcontainer/devcontainer.json` — go green. (Prebuild affects startup *speed* only; the pin is live on merge.)
+11. `PPBDS/primer` (only if its pin should move): same one-line bump.
+12. Ask the user to verify in a **fresh** Codespace. (An already-open Codespace won't pick up `devcontainer.json` changes from a `git pull` — it needs *Dev Containers: Rebuild Container*.)
 
 ### Conventions
 
