@@ -343,14 +343,14 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # the development version, not whatever an r-universe build cycle (or
 # CRAN) most recently blessed.
 #
-# Of these four, ONLY primer.tutorials is also refreshed to latest on every
-# Codespace create, via codespace-starter's postCreateCommand (decided
-# 2026-07: course content there can change at the last minute; the other
-# three ship at whatever version this image baked, and updates to them reach
-# students via the next image release + pin bump). Baking primer.tutorials
-# here pre-installs its whole dependency tree (so that refresh is a quick
-# update, not a cold build) and leaves a working fallback if GitHub is
-# unreachable. Note primer.tutorials was SPLIT OUT of the primer repo
+# NONE of these four are refreshed at Codespace create anymore (the live
+# primer.tutorials refresh was retired 2026-07-30; codespace-starter keeps
+# the recipe dormant in its devcontainer.json). All four ship at whatever
+# versions this image baked; updates reach students via the next image
+# release + pin bump. If the dormant refresh is ever revived, the baked
+# copies keep it a quick single-package update (deps pre-installed) and
+# remain the fallback if GitHub is unreachable at create time.
+# Note primer.tutorials was SPLIT OUT of the primer repo
 # (2026-07): as a subdir install ("PPBDS/primer/primer.tutorials") every
 # install downloaded the full ~183 MB primer tarball — book, class
 # exercises — to deliver a ~4 MB package, at every image build AND every
