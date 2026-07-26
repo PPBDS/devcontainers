@@ -34,6 +34,11 @@ ARG NODE_MAJOR=22
 ARG CLAUDE_CODE_VERSION=2.1.181
 ARG CODEX_VERSION=0.141.0
 
+# PPBDS.vscode-r-tutorials extension version, baked from Open VSX (see the
+# extension block near the bottom). Bump deliberately; a bump is an image
+# release.
+ARG RT_EXT_VERSION=1.0.0
+
 # System libraries needed by the R stacks below.
 #  - Geospatial: sf, terra, etc.
 #  - text shaping libs: ragg / textshaping (modern ggplot2 graphics)
@@ -497,6 +502,34 @@ RUN su rstudio -c "/opt/venv/bin/pip install --no-cache-dir --quiet cowsay" \
 # (build-test verified). Framework is only for standalone data-app projects.
 # The `observable --version` call is the smoke test (fails the build if broken).
 RUN npm install -g @observablehq/framework@1.13.4 && observable --version
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── R Tutorials VS Code extension (PPBDS.vscode-r-tutorials) ─────────────────
+# Baked into the image, pre-extracted into the VS Code server's extensions
+# dir, so the editor loads it from the very first window paint.
+#  - Why not devcontainer.json's "extensions" list: that list only installs
+#    from the Microsoft Marketplace, and we publish this extension to Open
+#    VSX only (Marketplace publishing is too painful — David, 2026-07).
+#  - Why not a vsix install at attach time (tried, in welcome.sh): an
+#    extension installed into an already-running window doesn't surface its
+#    Activity Bar icon until the window reloads — bad first-run UX.
+# A .vsix is a zip with the payload under extension/; the dir name follows
+# VS Code's publisher.name-version convention, which its scanner picks up.
+# NOTE: deliberate exception to "keep the image editor-agnostic" — non-VS-Code
+# consumers simply ignore ~/.vscode-remote. To ship a new extension version:
+# publish to Open VSX, bump RT_EXT_VERSION (top of file), release the image.
+RUN set -eux; \
+    url="https://open-vsx.org/api/PPBDS/vscode-r-tutorials/${RT_EXT_VERSION}/file/PPBDS.vscode-r-tutorials-${RT_EXT_VERSION}.vsix"; \
+    dest="/home/rstudio/.vscode-remote/extensions/ppbds.vscode-r-tutorials-${RT_EXT_VERSION}"; \
+    curl -fsSL -o /tmp/rt.vsix "$url"; \
+    python3 -m zipfile -e /tmp/rt.vsix /tmp/rt-ext; \
+    mkdir -p "$dest"; \
+    cp -R /tmp/rt-ext/extension/. "$dest/"; \
+    chown -R rstudio:rstudio /home/rstudio/.vscode-remote; \
+    rm -rf /tmp/rt.vsix /tmp/rt-ext; \
+    test -f "$dest/package.json"; \
+    python3 -c "import json, sys; v = json.load(open('$dest/package.json'))['version']; sys.exit(0 if v == '$RT_EXT_VERSION' else ('unexpected extension version: ' + v))"; \
+    echo "R-TUTORIALS EXTENSION ${RT_EXT_VERSION} OK"
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── Image-wide smoke tests ───────────────────────────────────────────────────
