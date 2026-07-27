@@ -372,7 +372,15 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # could not see (the katex incident, 2026-07). Keep Suggests curated
 # in those repos: every entry ships in this image. Smoke test 1b
 # below loads each one.
-RUN R -q -e 'pak::pkg_install(c( \
+# CACHE-BUST KNOB. Docker caches RUN layers by instruction text, so a rebuild
+# with no Dockerfile change reuses this layer and silently ships STALE course
+# packages — a "refresh primer.tutorials" release completed in 28 s as a full
+# cache hit (2026-07-27) and delivered bit-identical bits. Bump this date in
+# any release whose purpose is picking up new course-package commits from
+# GitHub HEAD; layers above stay cached, this one and everything after rebuild.
+ARG COURSE_PKG_REFRESH=2026-07-27
+RUN echo "course-package refresh: ${COURSE_PKG_REFRESH}" \
+ && R -q -e 'pak::pkg_install(c( \
         "PPBDS/tutorial.helpers", \
         "PPBDS/vscode.tutorials", \
         "PPBDS/misc.tutorials", \
