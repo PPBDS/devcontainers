@@ -74,7 +74,7 @@ The R version is encoded in the FROM line. We do not publish a separate `:r-4.5`
 ### A — cut an image release (in `devcontainers`)
 
 1. Branch off `main`.
-2. Make the change. Update the matching **smoke test** and **this CLAUDE.md** if the package/lib set changed.
+2. Make the change. Update the matching **smoke test** and **this CLAUDE.md** if the package/lib set changed. **If the release's purpose is refreshing course packages from GitHub HEAD (no other Dockerfile change), bump the `COURSE_PKG_REFRESH` date ARG** — Docker caches RUN layers by instruction text, so without the bump a rebuild is a full cache hit that ships stale packages while reporting success in ~30 s (bit us 2026-07-27). A ~30-second "successful" build is always a cache hit, never a refresh.
 3. **Validate before merging:** `gh workflow run build.yml --ref <branch>`, then watch it green. The build is heavy (source-builds `primer.*`, brms/Stan compile) — allow ~25 min. To introspect a published image cheaply, push a throwaway push-triggered workflow that does `docker run <image> …`, read the log, delete the branch.
 4. PR → `gh pr merge --merge --delete-branch` → sync `main`.
 5. Version: increment the last digit of the latest tag (see Tagging above).
