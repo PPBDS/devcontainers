@@ -540,6 +540,36 @@ RUN set -eux; \
     echo "R-TUTORIALS EXTENSION ${RT_EXT_VERSION} OK"
 # ─────────────────────────────────────────────────────────────────────────────
 
+# ── First-run terminal notice ────────────────────────────────────────────────
+# The text the devcontainers base prints in the FIRST terminal of a new
+# Codespace (via its bash.bashrc hook; shown once per codespace, tracked by a
+# marker in ~/.config/vscode-dev-containers/). We replace the stock "Welcome
+# to Codespaces" blurb because it fires at the START of a ~30 s silent gap —
+# extensions installing, postAttach still queued — during which students
+# wonder if setup is done and start typing. This text bridges the gap: it
+# says setup is still running and names the exact banner (welcome.sh's
+# "YOUR CODESPACE IS READY", from codespace-starter) that means "go". The
+# wording deliberately tolerates the fast case where the banner is already
+# visible. Keep the banner text here in sync with welcome.sh.
+COPY <<'NOTICE' /usr/local/etc/vscode-dev-containers/first-run-notice.txt
+👋 Welcome! This is your data-science workshop for Preceptor's Primer.
+
+⏳ SETUP IS STILL FINISHING — usually about half a minute more.
+
+   Please don't type anything yet. You're ready to start when you see:
+
+       ✅  YOUR CODESPACE IS READY
+
+   That banner will tell you what to do next. (Already see it below?
+   Then you're all set.)
+NOTICE
+
+# Smoke test: the notice is in place and names the ready banner.
+RUN test -s /usr/local/etc/vscode-dev-containers/first-run-notice.txt \
+    && grep -q "YOUR CODESPACE IS READY" /usr/local/etc/vscode-dev-containers/first-run-notice.txt \
+    && echo "FIRST-RUN NOTICE OK"
+# ─────────────────────────────────────────────────────────────────────────────
+
 # ── Image-wide smoke tests ───────────────────────────────────────────────────
 # R smoke test: foundational packages must load. Catches binary-ABI
 # mismatches at build time instead of at Codespace-launch time.
