@@ -33,6 +33,7 @@ ARG NODE_MAJOR=22
 # version pin, so `agy` floats; see the agy install block below.)
 ARG CLAUDE_CODE_VERSION=2.1.181
 ARG CODEX_VERSION=0.141.0
+ARG GROK_VERSION=0.2.117
 
 # PPBDS.vscode-r-tutorials extension version, baked from Open VSX (see the
 # extension block near the bottom). Bump deliberately; a bump is an image
@@ -88,6 +89,7 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 #   - claude  (Claude Code, Anthropic)  — sign in with a Claude plan, or ANTHROPIC_API_KEY
 #   - codex   (Codex CLI, OpenAI)        — sign in with a ChatGPT plan, or `codex login`
 #   - agy     (Antigravity CLI, Google)  — sign in with a Google account, or ANTIGRAVITY_API_KEY
+#   - grok    (Grok Build, xAI)          — sign in with a SuperGrok / X Premium+ plan (`grok login`)
 #   - aider   (multi-provider)           — key-only: DeepSeek/OpenRouter/OpenAI/Anthropic
 #
 # NOTE: Google's Gemini CLI was REMOVED. Google EOL'd the consumer Gemini CLI
@@ -95,7 +97,7 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 # everyone to Antigravity. The Google slot is now the Antigravity CLI (`agy`,
 # installed further below via Google's curl installer, alongside arf).
 #
-# Node hosts the npm-distributed CLIs (claude, codex). We install from
+# Node hosts the npm-distributed CLIs (claude, codex, grok). We install from
 # NodeSource rather than apt: Ubuntu Noble ships Node 18.x, which is past end of
 # life — we want a current Node LTS for the npm CLIs. NodeSource gives us one
 # (pinned via NODE_MAJOR above). pipx installs aider into an isolated venv with
@@ -143,6 +145,7 @@ ENV PIPX_HOME=/opt/pipx \
 RUN npm install -g \
         "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
         "@openai/codex@${CODEX_VERSION}" \
+        "@xai-official/grok@${GROK_VERSION}" \
     && pipx install aider-chat
 
 # Pre-seed Codex CLI config for the runtime user (rstudio). The one setting
@@ -594,7 +597,7 @@ RUN R --vanilla -e 'suppressPackageStartupMessages({library(tidymodels); library
 RUN R --vanilla -e 'fit <- brms::brm(mpg ~ wt, data = mtcars, chains = 1, iter = 100, refresh = 0, silent = 2); stopifnot(inherits(fit, "brmsfit")); cat("brms + Stan end-to-end OK\n")'
 
 # CLI smoke test: every shell tool must be on PATH and runnable.
-RUN claude --version && codex --version && agy --version && aider --version
+RUN claude --version && codex --version && agy --version && grok --version && aider --version
 
 # ── End-to-end authoring smoke tests ─────────────────────────────────────────
 # These run last, once R + Python + Quarto are all in place, so they exercise
