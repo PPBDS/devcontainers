@@ -39,11 +39,12 @@ Replace `X.Y.Z` with the latest tag from the [releases page](https://github.com/
 
 ## AI coding assistants
 
-The image ships four AI coding CLIs so users can pick the model that fits their cost and quality needs:
+The image ships five AI coding CLIs so users can pick the model that fits their cost and quality needs:
 
 - **`claude`** — [Claude Code](https://docs.anthropic.com/claude-code). Anthropic's CLI, single-provider, uses Claude models. Highest quality, highest cost.
 - **`codex`** — [Codex CLI](https://developers.openai.com/codex/cli). OpenAI's CLI, uses GPT/Codex models. Included with a ChatGPT Plus/Pro plan.
 - **`agy`** — [Antigravity CLI](https://antigravity.google/docs/cli-overview). Google's terminal coding agent — the successor to the Gemini CLI, which Google [retired on 2026-06-18](https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/).
+- **`grok`** — [Grok Build](https://x.ai/news/grok-build-cli). xAI's terminal coding agent. Sign in with a SuperGrok or X Premium+ subscription (`grok login`).
 - **`aider`** — [Aider](https://aider.chat). Multi-provider. Point it at DeepSeek, OpenRouter, OpenAI, Anthropic, or any OpenAI-compatible endpoint. The cost-flexible option.
 
 The image ships **no credentials**. The recommended way to authenticate is to **sign in on first run**: start the CLI and complete the account sign-in (a ChatGPT plan for `codex`, a Claude plan for `claude`, a Google account for `agy`). This bills against a flat-rate subscription rather than metered API calls. As a fallback — and the only option for `aider` — supply an API key via Codespaces user secrets (below); each CLI stays inert until it has either a sign-in or a key.
