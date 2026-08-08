@@ -48,3 +48,46 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Standing policy (David, 2026-08-08): keep only the caches used by the
+  # last two builds; delete everything older. mode=max caching of a ~4.6 GB
+  # image blows through the repo's 10 GB Actions-cache budget in two or three
+  # builds, after which GitHub's LRU eviction thrashes layer caches
+  # unpredictably. BuildKit blobs are content-addressed and shared across
+  # builds — their last_accessed_at refreshes on reuse — so "not accessed
+  # since the second-most-recent completed build began" is the honest
+  # definition of "prior to the last two". Runs even if the build fails
+  # (if: always()), since cache bloat is independent of build success.
+  prune-caches:
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Delete caches not used by the last two builds
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Two most recent completed runs of this workflow; the current run
+          # is not yet "completed", so these are the two builds BEFORE it —
+          # together with the current run's fresh caches, that keeps two
+          # builds' worth of reusable layers.
+          cutoff=$(gh run list -R "$GITHUB_REPOSITORY" -w build-and-push \
+                     --status completed --limit 2 --json createdAt \
+                     --jq '.[-1].createdAt' || true)
+          if [ -z "$cutoff" ]; then
+            echo "fewer than two completed builds; nothing to prune"; exit 0
+          fi
+          echo "pruning caches last accessed before $cutoff"
+          deleted=0
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/caches?per_page=100" \
+              --jq '.actions_caches[] | [.id, .last_accessed_at] | @tsv' \
+            | while IFS=$'\t' read -r id ts; do
+                if [[ "$ts" < "$cutoff" ]]; then
+                  gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/caches/$id" \
+                    >/dev/null && echo "deleted cache $id (last used $ts)"
+                fi
+              done
+          echo "prune complete"

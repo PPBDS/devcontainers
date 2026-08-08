@@ -61,7 +61,7 @@ The R version is encoded in the FROM line. We do not publish a separate `:r-4.5`
 
 ## CI and build
 
-`.github/workflows/build.yml` — a single job that builds and pushes the image on push to `main`, on tagged releases (`v*`), and on `workflow_dispatch` (used for pre-merge branch validation). Builds run on Ubuntu; the image runs on Linux/macOS/Windows hosts via Docker Desktop or Codespaces.
+`.github/workflows/build.yml` — a single job that builds and pushes the image on push to `main`, on tagged releases (`v*`), and on `workflow_dispatch` (used for pre-merge branch validation). Builds run on Ubuntu; the image runs on Linux/macOS/Windows hosts via Docker Desktop or Codespaces. A `prune-caches` job runs after every build (standing policy, David 2026-08): Actions caches not used by the last two builds are deleted — `mode=max` caching of this image overflows the 10 GB repo budget in a few builds, and GitHub's LRU eviction then thrashes layers unpredictably.
 
 ## Release & rollout runbook
 
