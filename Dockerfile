@@ -23,17 +23,20 @@
 # devcontainer image; revisit once it exists and its P3M binaries settle.
 FROM ghcr.io/rocker-org/devcontainer/tidyverse:4.5@sha256:289c5d02d8115aa209f4a8a49ee9378dccbf623897eed9cc46c87dfbbca9015b
 
-ARG QUARTO_VERSION=1.9.38
-ARG ARF_VERSION=0.3.4
-ARG NODE_MAJOR=22
+ARG QUARTO_VERSION=1.10.18
+ARG ARF_VERSION=0.4.5
+ARG NODE_MAJOR=24
 
 # AI CLI versions. Pinned so builds are reproducible and the baked version
 # doesn't silently drift behind the registry. Bump deliberately, like
 # Quarto/arf. (Antigravity CLI is the exception — its installer offers no
 # version pin, so `agy` floats; see the agy install block below.)
-ARG CLAUDE_CODE_VERSION=2.1.181
-ARG CODEX_VERSION=0.141.0
-ARG GROK_VERSION=0.2.117
+ARG CLAUDE_CODE_VERSION=2.1.226
+ARG CODEX_VERSION=0.147.0
+ARG GROK_VERSION=1.0.0
+# aider is pip-distributed; pinned like the npm CLIs (it floated unpinned
+# until v1.0.8 — the one exception with a pin mechanism available).
+ARG AIDER_VERSION=0.86.2
 
 # PPBDS.vscode-r-tutorials extension version, baked from Open VSX (see the
 # extension block near the bottom). Bump deliberately; a bump is an image
@@ -146,7 +149,7 @@ RUN npm install -g \
         "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
         "@openai/codex@${CODEX_VERSION}" \
         "@xai-official/grok@${GROK_VERSION}" \
-    && pipx install aider-chat
+    && pipx install "aider-chat==${AIDER_VERSION}"
 
 # Pre-seed Codex CLI config for the runtime user (rstudio). The one setting
 # that matters for an immutable image:
@@ -381,7 +384,7 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # cache hit (2026-07-27) and delivered bit-identical bits. Bump this date in
 # any release whose purpose is picking up new course-package commits from
 # GitHub HEAD; layers above stay cached, this one and everything after rebuild.
-ARG COURSE_PKG_REFRESH=2026-07-27
+ARG COURSE_PKG_REFRESH=2026-08-08
 RUN echo "course-package refresh: ${COURSE_PKG_REFRESH}" \
  && R -q -e 'pak::pkg_install(c( \
         "PPBDS/tutorial.helpers", \
@@ -463,7 +466,7 @@ USER root
 # We still set RETICULATE_PYTHON so that IF someone installs R's reticulate
 # (not baked in) it bridges to this same venv rather than a separate Python.
 # uv's own binary is copied from its official pinned image (pinned, unlike agy).
-COPY --from=ghcr.io/astral-sh/uv:0.11.23 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.12.3 /uv /usr/local/bin/uv
 COPY requirements.lock /tmp/requirements.lock
 COPY requirements.txt /tmp/requirements.txt
 
@@ -559,12 +562,9 @@ COPY <<'NOTICE' /usr/local/etc/vscode-dev-containers/first-run-notice.txt
 
 ⏳ SETUP IS STILL FINISHING — usually about half a minute more.
 
-   Please don't type anything yet. You're ready to start when you see:
-
-       ✅  YOUR CODESPACE IS READY
-
-   That banner will tell you what to do next. (Already see it below?
-   Then you're all set.)
+   Please don't type anything yet. Setup is done only when a banner
+   saying "✅  YOUR CODESPACE IS READY" appears below, and that banner
+   will tell you what to do next. (Already see it? Then you're all set.)
 NOTICE
 
 # Smoke test: the notice is in place and names the ready banner.
