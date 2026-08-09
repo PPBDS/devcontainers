@@ -15,13 +15,22 @@
 # then course packages and per-user installs (rstudio), then Python/JS
 # (root), then the end-to-end smoke tests.
 
-# Pinned by digest. The :4.5 tag floats as Rocker patches the image; the
-# digest freezes us at a known build. To bump: pull :4.5 fresh, copy the
-# new digest in, commit deliberately. Do not switch to :4.5 unpinned.
-# R version note: this base is R 4.5 (rocker's newest devcontainer image).
-# R 4.6.0 shipped 2026-04-24 but rocker has not yet published a :4.6
-# devcontainer image; revisit once it exists and its P3M binaries settle.
-FROM ghcr.io/rocker-org/devcontainer/tidyverse:4.5@sha256:289c5d02d8115aa209f4a8a49ee9378dccbf623897eed9cc46c87dfbbca9015b
+# Pinned by digest. The :4.6 tag floats as Rocker patches the image; the
+# digest freezes us at a known build. To bump: pull :4.6 fresh, copy the
+# new digest in, commit deliberately. Do not switch to :4.6 unpinned.
+# R version note: this base is R 4.6.1 on ubuntu:noble (verified from the
+# image config, 2026-08-09, before the 4.5 → 4.6 migration in v1.1.0; P3M
+# noble binaries for R 4.6 were confirmed mature at the same time). The
+# R-version smoke test near the bottom fails the build if a digest bump
+# ever changes the R minor version unnoticed.
+FROM ghcr.io/rocker-org/devcontainer/tidyverse:4.6@sha256:3a9ecbed900f17da528cdb17c3ddc43045fc9b4be7dbd8c61cb7b8a6439bfa6b
+
+# Dated P3M snapshot for the R stacks we take NEWER than rocker's frozen
+# repo (modeling + inference/presentation blocks below). Was "latest", which
+# made rebuilds of the same tag day-dependent; a dated snapshot makes every
+# release reproducible. Bump this date (any recent date; P3M snapshots are
+# daily) when a release should pick up newer CRAN versions of those stacks.
+ARG P3M_SNAPSHOT=2026-08-08
 
 ARG QUARTO_VERSION=1.10.18
 ARG ARF_VERSION=0.4.5
@@ -200,9 +209,9 @@ RUN ln -s /home/rstudio/.cargo/bin/arf /usr/local/bin/arf \
 # pak: fast parallel R package installer, used for every R install below.
 RUN R -q -e 'install.packages("pak", repos = sprintf("https://r-lib.github.io/p/pak/stable/%s/%s/%s", .Platform$pkgType, R.Version()$os, R.Version()$arch))'
 
-# tidymodels + a set of modeling engines. All of these are pulled from the
-# CURRENT P3M snapshot (overriding rocker's frozen one) so we get versions
-# recent enough for the CatBoost engine (parsnip >= 1.4.0, bonsai >= 0.4.1)
+# tidymodels + a set of modeling engines. All of these are pulled from a
+# DATED P3M snapshot (P3M_SNAPSHOT arg — newer than rocker's frozen repo,
+# reproducible across rebuilds) so we get versions recent enough for the CatBoost engine (parsnip >= 1.4.0, bonsai >= 0.4.1)
 # and current everything else. None of the engine packages ship inside the
 # tidymodels meta-package — parsnip only provides the interface, so each
 # backend is installed explicitly here:
@@ -219,7 +228,7 @@ RUN R -q -e 'install.packages("pak", repos = sprintf("https://r-lib.github.io/p/
 # is amd64-only (build.yml sets no platforms), so the x86_64 binary suffices. The
 # end-to-end fit smoke test near the bottom proves the engine actually works —
 # important, since we install it with --no-test-load.
-RUN R -q -e 'options(repos = c(P3M = "https://packagemanager.posit.co/cran/__linux__/noble/latest")); pak::pkg_install(c("tidymodels", "bonsai", "remotes", "xgboost", "lightgbm", "randomForest", "ranger", "glmnet", "brms", "BH", "RcppEigen", "RcppParallel"))' \
+RUN R -q -e "options(repos = c(P3M = 'https://packagemanager.posit.co/cran/__linux__/noble/${P3M_SNAPSHOT}')); pak::pkg_install(c('tidymodels', 'bonsai', 'remotes', 'xgboost', 'lightgbm', 'randomForest', 'ranger', 'glmnet', 'brms', 'BH', 'RcppEigen', 'RcppParallel'))" \
  && R -q -e 'remotes::install_url("https://github.com/catboost/catboost/releases/download/v1.2.10/catboost-R-linux-x86_64-1.2.10.tgz", INSTALL_opts = c("--no-multiarch", "--no-test-load", "--no-staged-install"))'
 
 # Inference-reporting + presentation packages. Used pervasively in BOTH
@@ -237,7 +246,7 @@ RUN R -q -e 'options(repos = c(P3M = "https://packagemanager.posit.co/cran/__lin
 #   - patchwork       : ggplot composition ("p1 + p2")
 #   - easystats       : meta-package (parameters/performance/effectsize/see/…)
 #                       used across the tutorials
-RUN R -q -e 'options(repos = c(P3M = "https://packagemanager.posit.co/cran/__linux__/noble/latest")); pak::pkg_install(c("gt", "marginaleffects", "patchwork", "easystats"))'
+RUN R -q -e "options(repos = c(P3M = 'https://packagemanager.posit.co/cran/__linux__/noble/${P3M_SNAPSHOT}')); pak::pkg_install(c('gt', 'marginaleffects', 'patchwork', 'easystats'))"
 
 # Silence easystats' on-attach update nag. easystats' .onAttach queries CRAN
 # LIVE on every library(easystats) (up to a 10 s network wait) and prints a
@@ -574,6 +583,11 @@ RUN test -s /usr/local/etc/vscode-dev-containers/first-run-notice.txt \
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── Image-wide smoke tests ───────────────────────────────────────────────────
+# R version guard: the base digest encodes the R version; this fails the
+# build if a digest bump ever changes the R minor version unnoticed (R minor
+# bumps break package ABI image-wide, so they must be deliberate migrations).
+RUN R --vanilla -e 'v <- getRversion(); stopifnot(v >= "4.6.0", v < "4.7.0"); cat("R", as.character(v), "OK\n")'
+
 # R smoke test: foundational packages must load. Catches binary-ABI
 # mismatches at build time instead of at Codespace-launch time.
 # --vanilla skips Rprofile so this isolates the package-load path itself.
