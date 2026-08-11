@@ -641,7 +641,7 @@ RUN set -eux; \
     cd /; rm -rf "$d"
 
 # (c) The course tutorials must be discoverable (catches a broken tutorial pkg).
-RUN R --vanilla -e 'ts <- learnr::available_tutorials("tutorial.helpers"); if (!("getting-started" %in% ts$name)) stop("getting-started tutorial not found"); cat("TUTORIALS OK:", paste(ts$name, collapse = ", "), "\n")'
+RUN R --vanilla -e 'ts <- learnr::available_tutorials("tutorial.helpers"); if (!("tutorials" %in% ts$name)) stop("tutorials tutorial not found"); cat("TUTORIALS OK:", paste(ts$name, collapse = ", "), "\n")'
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Locale (en_US.UTF-8) and timezone (Etc/UTC) are inherited from the rocker base.
