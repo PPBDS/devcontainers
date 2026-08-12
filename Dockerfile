@@ -206,6 +206,40 @@ USER root
 RUN ln -s /home/rstudio/.cargo/bin/arf /usr/local/bin/arf \
     && ln -s /home/rstudio/.local/bin/agy /usr/local/bin/agy
 
+# Smoke test: arf must fire a global-env `.First.sys` override during startup.
+# This is the contract the vscode-R session watcher depends on: its init.R
+# shadows `.First.sys` in globalenv and relies on R's startup calling that
+# shadow after default packages load — the deferred call is what attaches the
+# watcher and points plot() at httpgd. arf 0.4.5 broke the contract by
+# resolving `.First.sys` directly in the base namespace (an optimization that
+# skips the globalenv lookup R's native startup performs), so every student
+# plot() silently fell back to the pdf device — Rplots.pdf in the working
+# directory, no error anywhere (diagnosed live 2026-08-12; upstream fixed the
+# same bug class for Windows only in eitsupi/arf#158/#159). This test mimics
+# the vscode-R contract without the extension: a user profile shadows
+# .First.sys to set an httpgd device; an arf session (script(1) supplies the
+# pty arf needs) then runs plot(). The shadow must have fired (marker file)
+# and no Rplots.pdf may exist. Fails on arf 0.4.5, passes on 0.3.4 —
+# verified both ways when introduced. Do NOT bump ARF_VERSION unless this
+# test passes against the new version.
+USER rstudio
+RUN printf '%s\n' \
+        'first_sys_orig <- .First.sys' \
+        '.First.sys <- function() {' \
+        '    first_sys_orig()' \
+        '    options(device = function(...) httpgd::hgd())' \
+        '    writeLines("fired", "/tmp/first-sys-fired")' \
+        '}' \
+        > /tmp/vscode-like-profile.R \
+ && printf 'plot(1:10)\nq(save = "no")\n' > /tmp/arf-smoke-input.txt \
+ && cd /tmp \
+ && R_PROFILE_USER=/tmp/vscode-like-profile.R timeout 180 \
+        script -qec "arf" /dev/null < /tmp/arf-smoke-input.txt \
+ && test -f /tmp/first-sys-fired \
+ && ! test -e /tmp/Rplots.pdf \
+ && rm -f /tmp/vscode-like-profile.R /tmp/arf-smoke-input.txt /tmp/first-sys-fired
+USER root
+
 # pak: fast parallel R package installer, used for every R install below.
 RUN R -q -e 'install.packages("pak", repos = sprintf("https://r-lib.github.io/p/pak/stable/%s/%s/%s", .Platform$pkgType, R.Version()$os, R.Version()$arch))'
 
