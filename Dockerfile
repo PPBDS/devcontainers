@@ -217,9 +217,12 @@ RUN ln -s /home/rstudio/.cargo/bin/arf /usr/local/bin/arf \
 # directory, no error anywhere (diagnosed live 2026-08-12; upstream fixed the
 # same bug class for Windows only in eitsupi/arf#158/#159). This test mimics
 # the vscode-R contract without the extension: a user profile shadows
-# .First.sys to set an httpgd device; an arf session (script(1) supplies the
-# pty arf needs) then runs plot(). The shadow must have fired (marker file)
-# and no Rplots.pdf may exist. Fails on arf 0.4.5, passes on 0.3.4 —
+# .First.sys to set an httpgd device; `arf -e` then runs plot(). Eval mode is
+# load-bearing: arf's interactive TUI queries the terminal cursor position at
+# startup and dies in a build ("cursor position could not be read") even under
+# a script(1) pty — do not "simplify" this to a piped-REPL harness. The -e
+# flag exists in both 0.3.4 and 0.4.5. The shadow must have fired (marker
+# file) and no Rplots.pdf may exist. Fails on arf 0.4.5, passes on 0.3.4 —
 # verified both ways when introduced. Do NOT bump ARF_VERSION unless this
 # test passes against the new version.
 USER rstudio
@@ -231,13 +234,11 @@ RUN printf '%s\n' \
         '    writeLines("fired", "/tmp/first-sys-fired")' \
         '}' \
         > /tmp/vscode-like-profile.R \
- && printf 'plot(1:10)\nq(save = "no")\n' > /tmp/arf-smoke-input.txt \
  && cd /tmp \
- && R_PROFILE_USER=/tmp/vscode-like-profile.R timeout 180 \
-        script -qec "arf" /dev/null < /tmp/arf-smoke-input.txt \
+ && R_PROFILE_USER=/tmp/vscode-like-profile.R timeout 180 arf -e 'plot(1:10)' \
  && test -f /tmp/first-sys-fired \
  && ! test -e /tmp/Rplots.pdf \
- && rm -f /tmp/vscode-like-profile.R /tmp/arf-smoke-input.txt /tmp/first-sys-fired
+ && rm -f /tmp/vscode-like-profile.R /tmp/first-sys-fired
 USER root
 
 # pak: fast parallel R package installer, used for every R install below.
