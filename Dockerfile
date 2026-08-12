@@ -33,7 +33,13 @@ FROM ghcr.io/rocker-org/devcontainer/tidyverse:4.6@sha256:3a9ecbed900f17da528cdb
 ARG P3M_SNAPSHOT=2026-08-08
 
 ARG QUARTO_VERSION=1.10.18
-ARG ARF_VERSION=0.4.5
+# 0.4.5 → 0.3.4 ROLLBACK (2026-08-13): arf 0.4.x resolves .First.sys in the
+# base namespace at startup, bypassing the globalenv shadow the vscode-R
+# session watcher depends on — student plot() calls silently fell back to
+# Rplots.pdf. The smoke test below the arf install guards this contract; do
+# not re-bump until it passes against the new version (see the upstream
+# report on eitsupi/arf).
+ARG ARF_VERSION=0.3.4
 ARG NODE_MAJOR=24
 
 # AI CLI versions. Pinned so builds are reproducible and the baked version
