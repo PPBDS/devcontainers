@@ -235,9 +235,13 @@ RUN printf '%s\n' \
         '}' \
         > /tmp/vscode-like-profile.R \
  && cd /tmp \
- && R_PROFILE_USER=/tmp/vscode-like-profile.R timeout 180 arf -e 'plot(1:10)' \
- && test -f /tmp/first-sys-fired \
- && ! test -e /tmp/Rplots.pdf \
+ && { R_PROFILE_USER=/tmp/vscode-like-profile.R timeout 180 arf -e 'plot(1:10)' \
+        || { echo "ARF SMOKE FAIL: arf -e exited non-zero (rc=$?)"; exit 1; }; } \
+ && { test -f /tmp/first-sys-fired \
+        || { echo "ARF SMOKE FAIL: globalenv .First.sys shadow never fired (the vscode-R watcher contract)"; exit 1; }; } \
+ && { ! test -e /tmp/Rplots.pdf \
+        || { echo "ARF SMOKE FAIL: plot() fell back to the pdf device (Rplots.pdf exists)"; exit 1; }; } \
+ && echo "arf .First.sys contract OK" \
  && rm -f /tmp/vscode-like-profile.R /tmp/first-sys-fired
 USER root
 
