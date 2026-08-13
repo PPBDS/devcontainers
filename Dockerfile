@@ -33,13 +33,11 @@ FROM ghcr.io/rocker-org/devcontainer/tidyverse:4.6@sha256:3a9ecbed900f17da528cdb
 ARG P3M_SNAPSHOT=2026-08-08
 
 ARG QUARTO_VERSION=1.10.18
-# 0.4.5 → 0.3.4 ROLLBACK (2026-08-13): arf 0.4.x resolves .First.sys in the
-# base namespace at startup, bypassing the globalenv shadow the vscode-R
-# session watcher depends on — student plot() calls silently fell back to
-# Rplots.pdf. The smoke test below the arf install guards this contract; do
-# not re-bump until it passes against the new version (see the upstream
-# report on eitsupi/arf).
-ARG ARF_VERSION=0.3.4
+# (arf was wrongly suspected of the 2026-08 Rplots.pdf regression and briefly
+# rolled back to 0.3.4 on a branch; exonerated by a version matrix — the real
+# culprit is R 4.6's startup no longer calling a globalenv .First.sys
+# override. See the .First shim + smoke test after the arf install.)
+ARG ARF_VERSION=0.4.5
 ARG NODE_MAJOR=24
 
 # AI CLI versions. Pinned so builds are reproducible and the baked version
@@ -212,44 +210,67 @@ USER root
 RUN ln -s /home/rstudio/.cargo/bin/arf /usr/local/bin/arf \
     && ln -s /home/rstudio/.local/bin/agy /usr/local/bin/agy
 
-# Smoke test: arf must fire a global-env `.First.sys` override during startup.
-# This is the contract the vscode-R session watcher depends on: its init.R
-# shadows `.First.sys` in globalenv and relies on R's startup calling that
-# shadow after default packages load — the deferred call is what attaches the
-# watcher and points plot() at httpgd. arf 0.4.5 broke the contract by
-# resolving `.First.sys` directly in the base namespace (an optimization that
-# skips the globalenv lookup R's native startup performs), so every student
-# plot() silently fell back to the pdf device — Rplots.pdf in the working
-# directory, no error anywhere (diagnosed live 2026-08-12; upstream fixed the
-# same bug class for Windows only in eitsupi/arf#158/#159). This test mimics
-# the vscode-R contract without the extension: a user profile shadows
-# .First.sys to set an httpgd device; `arf -e` then runs plot(). Eval mode is
-# load-bearing: arf's interactive TUI queries the terminal cursor position at
-# startup and dies in a build ("cursor position could not be read") even under
-# a script(1) pty — do not "simplify" this to a piped-REPL harness. The -e
-# flag exists in both 0.3.4 and 0.4.5. The shadow must have fired (marker
-# file) and no Rplots.pdf may exist. Fails on arf 0.4.5, passes on 0.3.4 —
-# verified both ways when introduced. Do NOT bump ARF_VERSION unless this
-# test passes against the new version.
+# ---- vscode-R session-watcher repair for R >= 4.6 ----------------------
+# The vscode-R extension's session watcher attaches by shadowing `.First.sys`
+# in globalenv (its init.R arms the shadow; R's startup is expected to call
+# it after default packages load — the deferred call attaches the watcher and
+# points plot() at httpgd). R 4.6 changed startup to no longer call a
+# globalenv `.First.sys` override (verified empirically 2026-08-13: identical
+# shadow fires on R 4.5.3, never on R 4.6.1 — plain R, no console involved;
+# arf was wrongly suspected first). Without the call, the watcher silently
+# never attaches and every student plot() falls back to the pdf device —
+# Rplots.pdf and no error anywhere.
+#
+# The shim: R still honors the documented `.First()` user hook, which runs
+# after all profiles (site, then user — where vscode-R arms its shadow). So
+# the site profile defines a `.First` that fires an armed globalenv
+# `.First.sys` if present. Non-VS-Code sessions have no armed shadow and the
+# shim is a no-op. A student defining .First in their own .Rprofile would
+# override this (acceptable: intro students don't). Remove when vscode-R
+# ships its own R-4.6 fix (watch REditorSupport/vscode-R).
+RUN cat >> /usr/local/lib/R/etc/Rprofile.site <<'EOF'
+
+# vscode-R session watcher on R >= 4.6: fire the globalenv .First.sys shadow
+# that init.R arms — R 4.6 startup no longer calls it (see the PPBDS/
+# devcontainers Dockerfile). No-op outside VS Code R sessions.
+.First <- function() {
+    fs <- globalenv()$.First.sys
+    if (is.function(fs)) fs()
+}
+EOF
+
+# Smoke test for the shim + the full watcher contract, run against the REAL
+# baked Rprofile.site: a user profile arms a vscode-like .First.sys shadow
+# that sets an httpgd device and plots; `arf headless` (built for CI — the
+# interactive TUI dies in a build querying the cursor position, and `arf -e`
+# skips the full R startup sequence entirely, so neither is a usable harness)
+# must fire the shadow via the site-profile shim. Marker file must appear and
+# no Rplots.pdf may be written. Verified red without the shim on R 4.6.1
+# (3× independently: plain R, arf -e, arf headless) and green with it.
 USER rstudio
 RUN printf '%s\n' \
         'first_sys_orig <- .First.sys' \
         '.First.sys <- function() {' \
         '    first_sys_orig()' \
         '    options(device = function(...) httpgd::hgd())' \
+        '    plot(1:10)' \
         '    writeLines("fired", "/tmp/first-sys-fired")' \
         '}' \
         > /tmp/vscode-like-profile.R \
  && cd /tmp \
- && { R_PROFILE_USER=/tmp/vscode-like-profile.R timeout 180 arf -e 'plot(1:10)' \
-        || { echo "ARF SMOKE FAIL: arf -e exited non-zero (rc=$?)"; exit 1; }; } \
- && { test -f /tmp/first-sys-fired \
-        || { echo "ARF SMOKE FAIL: globalenv .First.sys shadow never fired (the vscode-R watcher contract)"; exit 1; }; } \
+ && rm -f /tmp/first-sys-fired /tmp/Rplots.pdf \
+ && { R_PROFILE_USER=/tmp/vscode-like-profile.R timeout 90 arf headless --ipc-bind /tmp/smoke.sock & } \
+ && ARF_PID=$! \
+ && i=0; while [ $i -lt 45 ] && ! test -f /tmp/first-sys-fired; do sleep 1; i=$((i+1)); done; \
+    kill $ARF_PID 2>/dev/null || true; \
+    { test -f /tmp/first-sys-fired \
+        || { echo "WATCHER SMOKE FAIL: globalenv .First.sys shadow never fired (R 4.6 shim broken?)"; exit 1; }; } \
  && { ! test -e /tmp/Rplots.pdf \
-        || { echo "ARF SMOKE FAIL: plot() fell back to the pdf device (Rplots.pdf exists)"; exit 1; }; } \
- && echo "arf .First.sys contract OK" \
+        || { echo "WATCHER SMOKE FAIL: plot() fell back to the pdf device (Rplots.pdf exists)"; exit 1; }; } \
+ && echo "vscode-R watcher contract OK (shim fired, plot routed to httpgd)" \
  && rm -f /tmp/vscode-like-profile.R /tmp/first-sys-fired
 USER root
+# ---- end session-watcher repair ----------------------------------------
 
 # pak: fast parallel R package installer, used for every R install below.
 RUN R -q -e 'install.packages("pak", repos = sprintf("https://r-lib.github.io/p/pak/stable/%s/%s/%s", .Platform$pkgType, R.Version()$os, R.Version()$arch))'
