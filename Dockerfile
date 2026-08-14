@@ -459,7 +459,7 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # cache hit (2026-07-27) and delivered bit-identical bits. Bump this date in
 # any release whose purpose is picking up new course-package commits from
 # GitHub HEAD; layers above stay cached, this one and everything after rebuild.
-ARG COURSE_PKG_REFRESH=2026-08-11
+ARG COURSE_PKG_REFRESH=2026-08-14
 RUN echo "course-package refresh: ${COURSE_PKG_REFRESH}" \
  && R -q -e 'pak::pkg_install(c( \
         "PPBDS/tutorial.helpers", \
