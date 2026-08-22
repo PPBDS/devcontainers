@@ -589,6 +589,15 @@ RUN su rstudio -c "/opt/venv/bin/pip install --no-cache-dir --quiet cowsay" \
 # quarto emitted a document. Runs as rstudio, like a student. NOT covered,
 # and deliberately gone with the extensions: the editor-side .ipynb UI, cell
 # run-buttons, and Python IntelliSense.
+#
+# PATH is passed through explicitly because `su rstudio -c` RESETS it on
+# Debian (login.defs), dropping the /opt/venv/bin that this image's ENV puts
+# first — Quarto then falls back to the system python3, which has no jupyter
+# or yaml, and the render dies with "Jupyter is not available in this Python
+# installation" (build 32544605003). Students are unaffected: their terminals
+# inherit the container ENV. Same reason the pip test above uses an absolute
+# /opt/venv/bin path. The outer shell expands $PATH here, so the literal
+# venv-first path is what reaches rstudio.
 RUN mkdir -p /tmp/pysmoke \
  && printf '%s\n' \
       '---' \
@@ -602,7 +611,7 @@ RUN mkdir -p /tmp/pysmoke \
       '```' \
       > /tmp/pysmoke/smoke.qmd \
  && chown -R rstudio /tmp/pysmoke \
- && su rstudio -c "cd /tmp/pysmoke && quarto render smoke.qmd --to html" \
+ && su rstudio -c "cd /tmp/pysmoke && PATH='$PATH' quarto render smoke.qmd --to html" \
  && test -f /tmp/pysmoke/smoke.html \
  && grep -qx '6' /tmp/pysmoke/chunk-ran \
  && echo "quarto python-chunk render OK" \
