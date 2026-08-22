@@ -459,7 +459,7 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # cache hit (2026-07-27) and delivered bit-identical bits. Bump this date in
 # any release whose purpose is picking up new course-package commits from
 # GitHub HEAD; layers above stay cached, this one and everything after rebuild.
-ARG COURSE_PKG_REFRESH=2026-08-14
+ARG COURSE_PKG_REFRESH=2026-08-22
 RUN echo "course-package refresh: ${COURSE_PKG_REFRESH}" \
  && R -q -e 'pak::pkg_install(c( \
         "PPBDS/tutorial.helpers", \
@@ -578,6 +578,35 @@ RUN python -c "import numpy, pandas, matplotlib, seaborn, sklearn, statsmodels, 
 RUN su rstudio -c "/opt/venv/bin/pip install --no-cache-dir --quiet cowsay" \
     && /opt/venv/bin/python -c "import cowsay; print('rstudio-can-install OK')" \
     && /opt/venv/bin/pip uninstall -y --quiet cowsay
+
+# Smoke test 3: Quarto renders a Python chunk through the jupyter engine,
+# driven entirely from the CLI. This is the student-facing Python path now
+# that codespace-starter dropped the VS Code Python extensions (2026-08-20,
+# to thin the Activity Bar): the claim was that nothing students actually do
+# depends on those extensions, and this test is that claim made falsifiable.
+# The chunk writes a file rather than checking rendered HTML, so the test
+# proves the chunk EXECUTED (with pandas importable) rather than merely that
+# quarto emitted a document. Runs as rstudio, like a student. NOT covered,
+# and deliberately gone with the extensions: the editor-side .ipynb UI, cell
+# run-buttons, and Python IntelliSense.
+RUN mkdir -p /tmp/pysmoke \
+ && printf '%s\n' \
+      '---' \
+      'title: py-engine smoke' \
+      'format: html' \
+      '---' \
+      '' \
+      '```{python}' \
+      'import pandas as pd' \
+      'open("/tmp/pysmoke/chunk-ran", "w").write(str(int(pd.Series([1, 2, 3]).sum())))' \
+      '```' \
+      > /tmp/pysmoke/smoke.qmd \
+ && chown -R rstudio /tmp/pysmoke \
+ && su rstudio -c "cd /tmp/pysmoke && quarto render smoke.qmd --to html" \
+ && test -f /tmp/pysmoke/smoke.html \
+ && grep -qx '6' /tmp/pysmoke/chunk-ran \
+ && echo "quarto python-chunk render OK" \
+ && rm -rf /tmp/pysmoke
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── Observable Framework ─────────────────────────────────────────────────────
