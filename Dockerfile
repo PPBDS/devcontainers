@@ -459,7 +459,7 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # cache hit (2026-07-27) and delivered bit-identical bits. Bump this date in
 # any release whose purpose is picking up new course-package commits from
 # GitHub HEAD; layers above stay cached, this one and everything after rebuild.
-ARG COURSE_PKG_REFRESH=2026-08-22
+ARG COURSE_PKG_REFRESH=2026-09-17
 RUN echo "course-package refresh: ${COURSE_PKG_REFRESH}" \
  && R -q -e 'pak::pkg_install(c( \
         "PPBDS/tutorial.helpers", \
@@ -657,6 +657,32 @@ RUN set -eux; \
     test -f "$dest/package.json"; \
     python3 -c "import json, sys; v = json.load(open('$dest/package.json'))['version']; sys.exit(0 if v == '$RT_EXT_VERSION' else ('unexpected extension version: ' + v))"; \
     echo "R-TUTORIALS EXTENSION ${RT_EXT_VERSION} OK"
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── VS Code user settings: Workspace Trust off ───────────────────────────────
+# Pre-seeds the VS Code server's USER settings so `security.workspace.trust.
+# enabled = false` exists BEFORE the first window paints. Without it, every
+# fresh Codespace shows the "Do you trust the authors?" modal plus the grey
+# "Restricted Mode" bar. codespace-starter's welcome.sh writes the same key,
+# but at postAttachCommand — after the editor has already attached and
+# prompted (proven 2026-08-22: the write lands, and a window reload then shows
+# no prompts; only the timing was wrong). It is an APPLICATION-scoped setting:
+# it cannot come from devcontainer.json or workspace settings, only from this
+# user-settings file. Same deliberate editor-agnosticism exception as the
+# extension bake above — non-VS-Code consumers ignore ~/.vscode-remote.
+# welcome.sh's write stays as belt-and-suspenders (it skips when the key is
+# present).
+COPY --chown=rstudio:rstudio <<'SETTINGS' /home/rstudio/.vscode-remote/data/User/settings.json
+{
+  "security.workspace.trust.enabled": false
+}
+SETTINGS
+# Smoke test: valid JSON with the key, and the whole server dir owned by rstudio
+# (VS Code writes globalStorage etc. beside it at runtime).
+RUN chown -R rstudio:rstudio /home/rstudio/.vscode-remote \
+ && python3 -c "import json; d = json.load(open('/home/rstudio/.vscode-remote/data/User/settings.json')); assert d['security.workspace.trust.enabled'] is False" \
+ && test "$(stat -c %U /home/rstudio/.vscode-remote/data/User/settings.json)" = rstudio \
+ && echo "VSCODE USER SETTINGS (trust off) OK"
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── First-run terminal notice ────────────────────────────────────────────────

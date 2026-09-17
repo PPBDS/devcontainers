@@ -34,6 +34,7 @@ Everything lives in the single root `Dockerfile`. Its layer order mirrors the ol
 - Headless workarounds (`xdg-open` stub, `BROWSER=/usr/bin/true`).
 - A custom **first-run terminal notice** (`first-run-notice.txt`) replacing the stock Codespaces welcome: it tells students setup is still finishing and to wait for codespace-starter's "YOUR CODESPACE IS READY" banner — bridging the ~30 s silent gap between terminal attach and welcome.sh. Keep the banner text in sync with welcome.sh.
 - The **R Tutorials VS Code extension** (`PPBDS.vscode-r-tutorials`, pinned via the `RT_EXT_VERSION` build arg): the Open VSX .vsix is pre-extracted into `/home/rstudio/.vscode-remote/extensions/` at build time so the Activity Bar icon exists from the first window paint. It can NOT go in codespace-starter's `extensions` list (that installs from the Microsoft Marketplace only; we publish to Open VSX), and attach-time vsix installs need a window reload before the icon appears (tried, rejected). Deliberate exception to editor-agnosticism — non-VS-Code consumers ignore the dir. Shipping a new extension version = publish to Open VSX, bump `RT_EXT_VERSION`, cut a release.
+- **VS Code user-settings pre-seed (since v1.1.5):** `~/.vscode-remote/data/User/settings.json` with `security.workspace.trust.enabled: false`, so the trust modal and Restricted Mode bar never appear. Application-scoped, so it must exist before the first window paints — codespace-starter's postAttach write of the same key was too late (proven 2026-08-22). Same editor-agnosticism exception as the extension bake.
 
 ### Install-user convention (IMPORTANT)
 
@@ -93,7 +94,7 @@ The R version is encoded in the FROM line. We do not publish a separate `:r-4.5`
 
 8. `codespace-starter`: branch; bump the `"image"` pin **and** the "pinned to vX.Y.Z" comment; fold related comment/postCreateCommand edits into the same PR. PR → merge → sync.
 9. The three tutorial repos: bump the `image:` tag in each `student-env-render` job (one line per repo, direct to main is fine). Their next CI run then validates the tutorials against the new image.
-10. Watch the **Codespaces prebuild** — the Actions run named `.devcontainer/devcontainer.json` — go green. (Prebuild affects startup *speed* only; the pin is live on merge.)
+10. Watch the **Codespaces prebuild** — the Actions run named `.devcontainer/devcontainer.json` — go green. **The pin is NOT live for students until this prebuild finishes.** During the ~25 min it builds, a fresh Codespace may be served the PRE-merge snapshot — old image AND stale checkout (observed 2026-08-22) — and `prebuild_availability` reads null meanwhile. Merge when students aren't launching; announce only after green. (An earlier version of this line claimed the prebuild affects speed only; that was wrong.)
 11. `PPBDS/primer` (only if its pin should move): same one-line bump.
 12. Ask the user to verify in a **fresh** Codespace. (An already-open Codespace won't pick up `devcontainer.json` changes from a `git pull` — it needs *Dev Containers: Rebuild Container*.)
 
