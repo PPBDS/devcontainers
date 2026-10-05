@@ -30,31 +30,39 @@ FROM ghcr.io/rocker-org/devcontainer/tidyverse:4.6@sha256:3a9ecbed900f17da528cdb
 # made rebuilds of the same tag day-dependent; a dated snapshot makes every
 # release reproducible. Bump this date (any recent date; P3M snapshots are
 # daily) when a release should pick up newer CRAN versions of those stacks.
-ARG P3M_SNAPSHOT=2026-08-08
+ARG P3M_SNAPSHOT=2026-10-03
 
 ARG QUARTO_VERSION=1.10.18
+# GitHub CLI. Pinned via the release .deb, NOT apt: the cli.github.com apt
+# repo serves exactly ONE version (the current one), so an apt pin like
+# `gh=2.102.0` would fail the build the day the next gh ships. Unpinned until
+# v1.1.6, which is how v1.1.5 silently picked up a gh whose `auth login`
+# tried to use the clipboard (the "No clipboard utilities available" warning
+# connect-repo now suppresses with --clipboard=false).
+ARG GH_VERSION=2.102.0
 # (arf was wrongly suspected of the 2026-08 Rplots.pdf regression and briefly
 # rolled back to 0.3.4 on a branch; exonerated by a version matrix — the real
 # culprit is R 4.6's startup no longer calling a globalenv .First.sys
 # override. See the .First shim + smoke test after the arf install.)
-ARG ARF_VERSION=0.4.5
+ARG ARF_VERSION=0.5.3
 ARG NODE_MAJOR=24
 
 # AI CLI versions. Pinned so builds are reproducible and the baked version
 # doesn't silently drift behind the registry. Bump deliberately, like
 # Quarto/arf. (Antigravity CLI is the exception — its installer offers no
 # version pin, so `agy` floats; see the agy install block below.)
-ARG CLAUDE_CODE_VERSION=2.1.226
-ARG CODEX_VERSION=0.147.0
-ARG GROK_VERSION=1.0.0
+ARG CLAUDE_CODE_VERSION=2.1.289
+ARG CODEX_VERSION=0.160.0
+ARG GROK_VERSION=1.0.46
 # aider is pip-distributed; pinned like the npm CLIs (it floated unpinned
 # until v1.0.8 — the one exception with a pin mechanism available).
 ARG AIDER_VERSION=0.86.2
 
 # PPBDS.vscode-r-tutorials extension version, baked from Open VSX (see the
 # extension block near the bottom). Bump deliberately; a bump is an image
-# release.
-ARG RT_EXT_VERSION=1.0.0
+# release. 1.1.0+ lists and runs tutorials through the learnr2 R package,
+# which is therefore baked with the course packages — bump the two together.
+ARG RT_EXT_VERSION=1.1.0
 
 # System libraries needed by the R stacks below.
 #  - Geospatial: sf, terra, etc.
@@ -68,6 +76,14 @@ ARG RT_EXT_VERSION=1.0.0
 #  - qpdf: required by `R CMD check --as-cran` for PDF manual checks (package
 #    development; rocker/tidyverse already provides the rest of the
 #    build/check toolchain).
+#  - Images + animation (for the R magick/gganimate block and the Python
+#    Pillow/imageio packages): libmagick++-dev + gsfonts (magick),
+#    librsvg2-dev (rsvg), libavfilter-dev (av — the ffmpeg libraries), and the
+#    ffmpeg CLI itself, which matplotlib's animation writers and imageio's
+#    MP4 path shell out to. rocker/tidyverse already has libpng/libjpeg/
+#    libtiff/libwebp. (P3M ships Linux binaries of every R package in that
+#    block, so these are RUNTIME needs, not build-time; gifski's P3M binary
+#    needs no Rust toolchain.)
 # NOTE: libv8/libnode-dev is deliberately NOT installed here. The V8 R package
 # binary from Posit Package Manager is statically linked (bundled libv8) and
 # needs no system library, AND NodeSource's nodejs (installed below) ships
@@ -85,16 +101,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         cmake \
         libuv1-dev \
         qpdf \
+        libmagick++-dev \
+        gsfonts \
+        librsvg2-dev \
+        libavfilter-dev \
+        ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# GitHub CLI. Official install method per the gh docs.
-RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-        -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
-    && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-        > /etc/apt/sources.list.d/github-cli.list \
-    && apt-get update && apt-get install -y --no-install-recommends gh \
-    && rm -rf /var/lib/apt/lists/*
+# GitHub CLI, pinned (GH_VERSION) from the release .deb — see the ARG for why
+# not the apt repo. dpkg --print-architecture keeps it arch-portable like the
+# Quarto install below. The version check is the smoke test.
+RUN arch="$(dpkg --print-architecture)"; \
+    curl -fsSL -o /tmp/gh.deb \
+        "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${arch}.deb"; \
+    dpkg -i /tmp/gh.deb; \
+    rm /tmp/gh.deb; \
+    gh --version | grep -F "gh version ${GH_VERSION}"
 
 # AI coding-assistant CLIs. Four tools spanning several providers and billing
 # models (aider is itself multi-provider). Students choose which to use. The
@@ -459,19 +481,27 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # cache hit (2026-07-27) and delivered bit-identical bits. Bump this date in
 # any release whose purpose is picking up new course-package commits from
 # GitHub HEAD; layers above stay cached, this one and everything after rebuild.
-ARG COURSE_PKG_REFRESH=2026-09-17
+#
+# learnr2 (PPBDS/learnr2, not on CRAN, no releases yet — floats on HEAD with
+# the course packages, same refresh knob) is what the R Tutorials VS Code
+# extension (RT_EXT_VERSION >= 1.1.0) calls to list and run tutorials:
+# learnr2::available_tutorials() and learnr2::run_tutorial(), which hands a
+# classic learnr tutorial to learnr. No course package depends on it yet, so
+# it is named here explicitly; without it the Tutorials panel is dead.
+ARG COURSE_PKG_REFRESH=2026-10-05
 RUN echo "course-package refresh: ${COURSE_PKG_REFRESH}" \
  && R -q -e 'pak::pkg_install(c( \
         "PPBDS/tutorial.helpers", \
         "PPBDS/vscode.tutorials", \
         "PPBDS/misc.tutorials", \
-        "PPBDS/primer.tutorials" \
+        "PPBDS/primer.tutorials", \
+        "PPBDS/learnr2" \
     ), upgrade = TRUE, dependencies = TRUE)'
 
 # Smoke test 1: every baked-in package and the learnr/knitr/rmarkdown
 # chain must all load. The original learnr/xfun ABI mismatch failure
 # would have been caught here at build time.
-RUN R --vanilla -e 'for (p in c("tutorial.helpers", "vscode.tutorials", "misc.tutorials", "primer.tutorials", "learnr", "knitr", "rmarkdown")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)'
+RUN R --vanilla -e 'for (p in c("tutorial.helpers", "vscode.tutorials", "misc.tutorials", "primer.tutorials", "learnr2", "learnr", "knitr", "rmarkdown")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)'
 
 # Smoke test 1b: every Suggests of the four course packages must load —
 # Suggests is the ships-to-students contract (see the install block
@@ -516,6 +546,36 @@ RUN R -q -e 'pak::pkg_install(c("plotly", "leaflet", "DT", "crosstalk", "shiny",
 RUN R -q -e 'pak::pkg_install(c("sf", "tidycensus", "mapgl", "crsuggest", "idbr"))' \
     && R --vanilla -e 'for (p in c("sf","tidycensus","tigris","mapgl","crsuggest","idbr")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)' \
     && R --vanilla -e 'library(sf); p <- st_sfc(st_polygon(list(rbind(c(0,0), c(1,0), c(1,1), c(0,1), c(0,0)))), crs = 4326); pts <- st_sample(p, 10); stopifnot(length(pts) == 10); cat("sf geometry ops OK\n")'
+
+# Images + animation (since v1.1.6). The standard R toolkit for working with
+# pictures and for animating plots; system libs are in the apt block above.
+#   - magick:     ImageMagick bindings — read/write/resize/annotate/compose
+#                 any raster format; the hub everything else here plugs into
+#   - rsvg, webp, png, jpeg: format readers/writers magick and ggplot2
+#                 helpers lean on (rsvg renders SVG to raster)
+#   - ggimage, ggpattern, ggfx: pictures, image fills, and filters (glow,
+#                 shadow, blur) INSIDE ggplot2
+#   - gganimate:  animate a ggplot by a time/state variable; rendered by
+#   - gifski (GIF) and av (MP4 via ffmpeg) — both renderers, so students
+#                 can pick the format their target (web page vs. slide) needs
+#   - transformr: shape tweening for gganimate on polygons/paths/sf
+#   - camcorder:  records every plot made in a session into a GIF of the
+#                 build-up — a teaching device as much as an output
+# Deliberately NOT imager (needs X11; overlaps magick). P3M Linux binaries.
+# (Python equivalents — Pillow, scikit-image, imageio(+ffmpeg) — are in
+# requirements.lock; the ffmpeg CLI is apt-installed for matplotlib.)
+RUN R -q -e 'pak::pkg_install(c("magick", "rsvg", "webp", "png", "jpeg", "ggimage", "ggpattern", "ggfx", "gganimate", "gifski", "av", "transformr", "camcorder"))' \
+    && R --vanilla -e 'for (p in c("magick","rsvg","webp","png","jpeg","ggimage","ggpattern","ggfx","gganimate","gifski","av","transformr","camcorder")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)'
+
+# Smoke test: a PNG round trip + an SVG render through the real ImageMagick
+# and librsvg links (a load check passes even when the system lib is absent
+# at the version the binary wants — the first image_read is what fails).
+RUN R --vanilla -e 'library(magick); f <- tempfile(fileext = ".png"); image_write(image_blank(20, 10, "red"), f); i <- image_info(image_read(f)); stopifnot(i$width == 20, i$height == 10); s <- tempfile(fileext = ".png"); rsvg::rsvg_png(charToRaw("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"8\" height=\"8\"><rect width=\"8\" height=\"8\"/></svg>"), s); stopifnot(file.size(s) > 0); cat("magick + rsvg OK\n")'
+
+# Smoke test: gganimate end to end through BOTH renderers — a tiny GIF via
+# gifski and a tiny MP4 via av. This is the student path (animate() +
+# anim_save()) and the only proof the ffmpeg libraries actually link.
+RUN R --vanilla -e 'suppressPackageStartupMessages({library(ggplot2); library(gganimate)}); d <- data.frame(x = rep(1:3, 2), y = c(1, 2, 3, 3, 2, 1), t = rep(1:2, each = 3)); p <- ggplot(d, aes(x, y)) + geom_point() + transition_states(t); g <- tempfile(fileext = ".gif"); anim_save(g, animate(p, nframes = 4, fps = 2, width = 100, height = 100, renderer = gifski_renderer())); stopifnot(file.size(g) > 0); m <- tempfile(fileext = ".mp4"); anim_save(m, animate(p, nframes = 4, fps = 2, width = 100, height = 100, renderer = av_renderer())); stopifnot(file.size(m) > 0); cat("gganimate gif (gifski) + mp4 (av) OK\n")'
 
 USER root
 
@@ -570,7 +630,28 @@ ENV PATH=/opt/venv/bin:$PATH \
 
 # Smoke test 1: the whole stack must import (catches a bad lock / ABI break at
 # build time instead of at a student's first import).
-RUN python -c "import numpy, pandas, matplotlib, seaborn, sklearn, statsmodels, ipykernel, plotly, altair, folium, itables, shiny, shinylive; print('py-ds stack OK')"
+RUN python -c "import numpy, pandas, matplotlib, seaborn, sklearn, statsmodels, ipykernel, plotly, altair, folium, itables, shiny, shinylive, PIL, skimage, imageio, imageio_ffmpeg; print('py-ds stack OK')"
+
+# Smoke test 1b: images + animation end to end — a Pillow round trip, and a
+# matplotlib animation saved as GIF (PillowWriter) and MP4 (FFMpegWriter,
+# which shells out to the apt-installed ffmpeg CLI). This is the student
+# path; an import check cannot tell whether ffmpeg is actually on PATH.
+RUN python - <<'PY'
+import os, tempfile
+import numpy as np
+from PIL import Image
+import matplotlib; matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation, PillowWriter, FFMpegWriter
+d = tempfile.mkdtemp()
+p = os.path.join(d, "a.png"); Image.new("RGB", (20, 10), "red").save(p)
+assert Image.open(p).size == (20, 10)
+fig, ax = plt.subplots(figsize=(1, 1)); ln, = ax.plot([], [])
+anim = FuncAnimation(fig, lambda i: ln.set_data([0, i], [0, i]), frames=3)
+g = os.path.join(d, "a.gif"); anim.save(g, writer=PillowWriter(fps=2)); assert os.path.getsize(g) > 0
+m = os.path.join(d, "a.mp4"); anim.save(m, writer=FFMpegWriter(fps=2)); assert os.path.getsize(m) > 0
+print("Pillow + matplotlib gif/mp4 OK")
+PY
 
 # Smoke test 2: a non-root student (rstudio, in staff) can pip-install into the
 # venv — the Python analog of the R 'praise' test above. --seed gave the venv a
@@ -659,57 +740,65 @@ RUN set -eux; \
     echo "R-TUTORIALS EXTENSION ${RT_EXT_VERSION} OK"
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ── VS Code user settings: Workspace Trust off ───────────────────────────────
-# Pre-seeds the VS Code server's USER settings so `security.workspace.trust.
-# enabled = false` exists BEFORE the first window paints. Without it, every
-# fresh Codespace shows the "Do you trust the authors?" modal plus the grey
-# "Restricted Mode" bar. codespace-starter's welcome.sh writes the same key,
-# but at postAttachCommand — after the editor has already attached and
-# prompted (proven 2026-08-22: the write lands, and a window reload then shows
-# no prompts; only the timing was wrong). It is an APPLICATION-scoped setting:
-# it cannot come from devcontainer.json or workspace settings, only from this
-# user-settings file. Same deliberate editor-agnosticism exception as the
-# extension bake above — non-VS-Code consumers ignore ~/.vscode-remote.
-# welcome.sh's write stays as belt-and-suspenders (it skips when the key is
-# present).
-COPY --chown=rstudio:rstudio <<'SETTINGS' /home/rstudio/.vscode-remote/data/User/settings.json
-{
-  "security.workspace.trust.enabled": false
-}
-SETTINGS
-# Smoke test: valid JSON with the key, and the whole server dir owned by rstudio
-# (VS Code writes globalStorage etc. beside it at runtime).
-RUN chown -R rstudio:rstudio /home/rstudio/.vscode-remote \
- && python3 -c "import json; d = json.load(open('/home/rstudio/.vscode-remote/data/User/settings.json')); assert d['security.workspace.trust.enabled'] is False" \
- && test "$(stat -c %U /home/rstudio/.vscode-remote/data/User/settings.json)" = rstudio \
- && echo "VSCODE USER SETTINGS (trust off) OK"
+# NOTE — no Workspace Trust pre-seed. v1.1.5 baked a user settings.json with
+# `security.workspace.trust.enabled: false` here; it was REMOVED in v1.1.6
+# because it never worked: every security.workspace.trust.* setting is
+# application-scoped, read only from the Codespaces web client's browser-side
+# user settings (vscode workspace.contribution.ts), so neither the image, nor
+# devcontainer.json, nor a script in the container can suppress the "Do you
+# trust the authors?" modal. (The 2026-08-22 "proof" was a folder already
+# trusted by a click, then reloaded.) Students click "Trust Folder &
+# Continue". Do not re-add anything on this path.
+
+# ── First-run terminal notice: EMPTY on purpose ─────────────────────────────
+# The devcontainers base prints this file once, in the first terminal of a
+# new Codespace (its bash.bashrc hook tests only that the file EXISTS; with
+# no file it falls back to GitHub's stock "Welcome to Codespaces" blurb —
+# hence an empty file rather than none). Until v1.1.6 it held a "setup is
+# still finishing, wait for the banner" notice that bridged the gap before
+# codespace-starter's postAttach terminal appeared. That gap is gone: the
+# ready banner now prints from ~/.bashrc in this same first terminal, the
+# instant it opens, so any text here would just sit above it as noise.
+RUN : > /usr/local/etc/vscode-dev-containers/first-run-notice.txt
+
+# Smoke test: the file exists (so the stock blurb stays suppressed) and is
+# EMPTY (so nothing prints above the banner).
+RUN test -f /usr/local/etc/vscode-dev-containers/first-run-notice.txt \
+    && test ! -s /usr/local/etc/vscode-dev-containers/first-run-notice.txt \
+    && echo "FIRST-RUN NOTICE (empty) OK"
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ── First-run terminal notice ────────────────────────────────────────────────
-# The text the devcontainers base prints in the FIRST terminal of a new
-# Codespace (via its bash.bashrc hook; shown once per codespace, tracked by a
-# marker in ~/.config/vscode-dev-containers/). We replace the stock "Welcome
-# to Codespaces" blurb because it fires at the START of a ~30 s silent gap —
-# extensions installing, postAttach still queued — during which students
-# wonder if setup is done and start typing. This text bridges the gap: it
-# says setup is still running and names the exact banner (welcome.sh's
-# "YOUR CODESPACE IS READY", from codespace-starter) that means "go". The
-# wording deliberately tolerates the fast case where the banner is already
-# visible. Keep the banner text here in sync with welcome.sh.
-COPY <<'NOTICE' /usr/local/etc/vscode-dev-containers/first-run-notice.txt
-👋 Welcome! This is your data-science workshop for Preceptor's Primer.
+# ── `quarto create` never opens a duplicate editor tab ───────────────────────
+# `quarto create` auto-opens the new project in the editor it is running
+# inside: it detects VS Code purely from TERM_PROGRAM == "vscode" and runs
+# `code <path>` with no reuse flag — which, in the Codespaces web client,
+# opens a SECOND browser tab of the same Codespace (quarto-cli create/cmd.ts
+# resolveEditor; verified 2026-09-17). `--no-open` prevents it. A blanket
+# alias is wrong (`render`/`preview`/`publish` reject unknown options), so a
+# bash FUNCTION appends `--no-open` only to `create`, and only when neither
+# `--open` nor `--no-open` was given. Interactive shells only (/etc/bash.bashrc
+# is read by interactive non-login shells, i.e. VS Code terminals;
+# /etc/profile.d is NOT) — the Quarto VS Code extension execs the binary by
+# path and is unaffected. The tutorials show the flag explicitly anyway, so
+# this is a safety net, not magic they depend on.
+RUN cat >> /etc/bash.bashrc <<'EOF'
 
-⏳ SETUP IS STILL FINISHING — usually about half a minute more.
+# PPBDS: keep `quarto create` from opening a duplicate editor tab in Codespaces.
+quarto() {
+    if [ "${1-}" = "create" ]; then
+        for a in "$@"; do
+            case "$a" in --open|--no-open) command quarto "$@"; return ;; esac
+        done
+        command quarto "$@" --no-open
+    else
+        command quarto "$@"
+    fi
+}
+EOF
 
-   Please don't type anything yet. Setup is done only when a banner
-   saying "✅  YOUR CODESPACE IS READY" appears below, and that banner
-   will tell you what to do next. (Already see it? Then you're all set.)
-NOTICE
-
-# Smoke test: the notice is in place and names the ready banner.
-RUN test -s /usr/local/etc/vscode-dev-containers/first-run-notice.txt \
-    && grep -q "YOUR CODESPACE IS READY" /usr/local/etc/vscode-dev-containers/first-run-notice.txt \
-    && echo "FIRST-RUN NOTICE OK"
+# Smoke test: an interactive shell sees the function, and it forwards.
+RUN bash -ic 'type quarto | grep -q "is a function" && quarto --version' \
+    && echo "QUARTO CREATE SHIM OK"
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── Image-wide smoke tests ───────────────────────────────────────────────────
@@ -772,6 +861,11 @@ RUN set -eux; \
 
 # (c) The course tutorials must be discoverable (catches a broken tutorial pkg).
 RUN R --vanilla -e 'ts <- learnr::available_tutorials("tutorial.helpers"); if (!("getting-started" %in% ts$name)) stop("getting-started tutorial not found"); cat("TUTORIALS OK:", paste(ts$name, collapse = ", "), "\n")'
+
+# (d) The R Tutorials extension's own listing call must work: it runs exactly
+# this (src/extension.ts) to fill the Tutorials panel. A learnr2 that loads
+# but cannot list vscode.tutorials means an empty panel for every student.
+RUN R --vanilla -e 'ts <- learnr2::available_tutorials(package = "vscode.tutorials"); stopifnot(is.data.frame(ts), nrow(ts) > 0); cat("LEARNR2 LISTING OK:", nrow(ts), "vscode.tutorials tutorials\n")'
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Locale (en_US.UTF-8) and timezone (Etc/UTC) are inherited from the rocker base.

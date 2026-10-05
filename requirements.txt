@@ -8,25 +8,37 @@
 #   modelling/ML   → scikit-learn
 #   regression/inference → statsmodels (the lm() analog)
 #   notebooks      → jupyter, ipykernel
+#   images/animation → Pillow, scikit-image, imageio (+ffmpeg plugin) —
+#                    the Python side of the R magick/gganimate block
 #                    (also what Quarto's Python engine and the VS Code Jupyter
 #                     extension drive)
 #
 # Top-level pins. The fully-resolved tree (transitive deps) is locked in
 # student/requirements.lock (generated via `uv pip compile`, which the image
 # installs from). Edit this file and recompile to bump.
-numpy==2.5.0
-pandas==3.0.3
-matplotlib==3.11.0
+numpy==2.5.3
+pandas==3.0.6
+matplotlib==3.11.2
 seaborn==0.13.2
-scikit-learn==1.9.0
-statsmodels==0.14.6
+scikit-learn==1.9.1
+statsmodels==0.15.0
 jupyter==1.1.1
-ipykernel==7.3.0
+ipykernel==7.4.0
 
 # Interactive web visualisation + Shinylive (for "fancy" interactive websites).
-plotly==6.8.0
-altair==6.2.2
+plotly==7.1.0
+altair==6.3.0
 folium==0.20.0
-itables==2.8.1
-shiny==1.6.3
-shinylive==0.8.9
+itables==2.9.1
+shiny==1.8.0
+shinylive==0.8.12
+
+# Images + animation. Pillow is the picture library everything else builds on
+# (and matplotlib's GIF writer); scikit-image is the analysis layer (filters,
+# segmentation, measurements) on numpy arrays; imageio reads/writes GIF and —
+# with imageio-ffmpeg, which bundles its own ffmpeg binary — MP4. (matplotlib's
+# FFMpegWriter uses the apt-installed ffmpeg CLI instead; see the Dockerfile.)
+Pillow==12.3.0
+scikit-image==0.26.0
+imageio==2.38.0
+imageio-ffmpeg==0.6.0
