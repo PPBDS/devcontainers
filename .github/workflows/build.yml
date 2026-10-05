@@ -49,6 +49,29 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # The rocker base's devcontainer.metadata label asks Codespaces to
+      # install extensions at attach (R Debugger; an unpinned vscode-R). The
+      # Dockerfile overrides that label; this proves the PUSHED image carries
+      # the override — a Dockerfile RUN cannot inspect its own labels. Reads
+      # the registry config via imagetools (no 4.6 GB pull).
+      - name: Verify devcontainer.metadata label (no inherited extensions)
+        run: |
+          set -euo pipefail
+          tag="${{ fromJSON(steps.meta.outputs.json).tags[0] }}"
+          docker buildx imagetools inspect "$tag" --format '{{json .Image}}' > /tmp/image.json
+          python3 - <<'PY'
+          import json
+          d = json.load(open("/tmp/image.json"))
+          cfg = d if "config" in d else next(v for v in d.values() if isinstance(v, dict) and "config" in v)
+          meta = json.loads(cfg["config"]["Labels"]["devcontainer.metadata"])
+          exts = [e for m in meta for e in (m.get("customizations", {}).get("vscode", {}) or {}).get("extensions", [])]
+          users = [m.get("remoteUser") for m in meta if m.get("remoteUser")]
+          print("label extensions:", exts, "| remoteUser:", users)
+          assert exts == [], f"inherited extension list leaked into the label: {exts}"
+          assert users == ["rstudio"], f"remoteUser must stay rstudio, got {users}"
+          print("DEVCONTAINER METADATA LABEL OK")
+          PY
+
   # Standing policy (David, 2026-08-08): keep only the caches used by the
   # last two builds; delete everything older. mode=max caching of a ~4.6 GB
   # image blows through the repo's 10 GB Actions-cache budget in two or three

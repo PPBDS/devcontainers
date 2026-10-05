@@ -25,6 +25,17 @@
 # ever changes the R minor version unnoticed.
 FROM ghcr.io/rocker-org/devcontainer/tidyverse:4.6@sha256:3a9ecbed900f17da528cdb17c3ddc43045fc9b4be7dbd8c61cb7b8a6439bfa6b
 
+# Silence R's OpenTelemetry layer, image-wide and from the first R call.
+# shiny/knitr/promises import `otel`, and in the image build every quarto
+# render and learnr call printed a red "OpenTelemetry error: there is no
+# package called 'otelsdk'" (17× per build since at least v1.1.5): something
+# in the build environment names an exporter, otel then tries to load
+# otelsdk, which is not baked. The R-specific variable wins over the generic
+# OTEL_TRACES_EXPORTER, and "none" selects the no-op provider — the same
+# thing otel does when nothing is set. Nobody here wants traces. (Sat lower
+# in the file in v1.1.7, so one early step still printed it.)
+ENV OTEL_R_TRACES_EXPORTER=none
+
 # Dated P3M snapshot for the R stacks we take NEWER than rocker's frozen
 # repo (modeling + inference/presentation blocks below). Was "latest", which
 # made rebuilds of the same tag day-dependent; a dated snapshot makes every
@@ -389,15 +400,6 @@ RUN rm -rf /usr/local/lib/R/site-library/_cache \
 # top, not via pak.) Applies to the rstudio-user installs below, to
 # codespace-starter's postCreateCommand, and to runtime installs.
 ENV PKG_SYSREQS=false
-# Silence R's OpenTelemetry layer. shiny/knitr/promises import `otel`, and in
-# the image build every quarto render and learnr call printed a red
-# "OpenTelemetry error: there is no package called 'otelsdk'" (17× per build
-# since at least v1.1.5): something in the build environment names an
-# exporter, otel then tries to load otelsdk, which is not baked. The R-specific
-# variable wins over the generic OTEL_TRACES_EXPORTER, and "none" selects the
-# no-op provider — the same thing otel does when nothing is set. Nobody here
-# wants traces.
-ENV OTEL_R_TRACES_EXPORTER=none
 
 # ── Everything below installs as rstudio, not root ───────────────────────────
 # This is the design fix for a class of permissions bugs: when pak runs as
@@ -815,6 +817,32 @@ EOF
 # Smoke test: an interactive shell sees the function, and it forwards.
 RUN bash -ic 'type quarto | grep -q "is a function" && quarto --version' \
     && echo "QUARTO CREATE SHIM OK"
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── devcontainer.metadata label: inherited extension lists REMOVED ──────────
+# The rocker base image carries an OCI label, `devcontainer.metadata`, that
+# the devcontainer tooling (and so the Codespaces client) MERGES into the
+# effective devcontainer config at attach — including `customizations.vscode.
+# extensions`. Inherited as-is, that label asked for two extensions on EVERY
+# account, students included (found 2026-10-05, incognito as davekane-student):
+#   - `RDebugger.r-debugger` (rocker's own devcontainer config): with vscode-R
+#     3.x present it triggers the "R Debugger still registers the legacy
+#     r.rpath.<platform> setting" warning once per Codespace — for everyone.
+#   - `REditorSupport.r` UNPINNED (rocker's r-rig feature): a standing request
+#     for the Marketplace's latest vscode-R, competing with codespace-starter's
+#     version pin — how a Codespace went 2.8.8 → 3.0.1 uninvited that morning.
+# We bake every extension we want (see the extension block above) and
+# codespace-starter declares the pins, so the label must contribute NONE.
+# A LABEL here REPLACES the inherited value. What is kept: the feature ids
+# (informational) and `remoteUser: rstudio` — that one is load-bearing, it is
+# what makes the Codespace run as rstudio. Dropped besides the extensions:
+# rocker's `r.rterm.linux: …/radian` (deprecated key, radian is not even
+# installed), `r.plot.useHttpgd` and `r.bracketedPaste` (the launcher sets
+# the 3.0 equivalents), and the r-rig `[r]` wordSeparators (moved to the
+# launcher's settings, where it is visible). build.yml verifies the pushed
+# image's label after every build. If the base image ever adds metadata we
+# want, add it here deliberately — never by inheritance.
+LABEL devcontainer.metadata="[{\"id\":\"ghcr.io/devcontainers/features/common-utils:2\"},{\"id\":\"ghcr.io/rocker-org/devcontainer-features/r-rig:1\"},{\"id\":\"ghcr.io/rocker-org/devcontainer-features/r-packages:1\"},{\"remoteUser\":\"rstudio\"}]"
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── Image-wide smoke tests ───────────────────────────────────────────────────
