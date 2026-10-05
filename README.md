@@ -36,6 +36,7 @@ Replace `X.Y.Z` with the latest tag from the [releases page](https://github.com/
 - **Python** — a data-science stack installed with [`uv`](https://docs.astral.sh/uv/) into `/opt/venv` from a pinned lockfile: numpy, pandas, matplotlib, seaborn, scikit-learn, statsmodels, jupyter, ipykernel, Pillow, scikit-image, imageio. Default `python` on `PATH`, registered Jupyter kernel, group-writable so `pip install` works.
 - **Observable** — Quarto's `{ojs}` cells render Observable Plot / OJS out of the box; the [Observable Framework](https://observablehq.com/framework/) CLI is installed for standalone data-app projects.
 - **Package development** — `devtools`, `pkgdown`, `roxygen2`, `testthat`, `usethis`, and the R CMD check toolchain (incl. `qpdf`).
+- **VS Code extensions, baked** — vscode-R 3.x (with its `sess` session bridge pre-installed), Quarto, Live Server, PDF viewer, Rainbow CSV, and the PPBDS R Tutorials extension are pre-extracted into the image, so a Codespace opens with everything in place and installs nothing at attach.
 - **AI coding assistants** — see below.
 
 ## AI coding assistants
