@@ -58,11 +58,29 @@ ARG GROK_VERSION=1.0.46
 # until v1.0.8 — the one exception with a pin mechanism available).
 ARG AIDER_VERSION=0.86.2
 
-# PPBDS.vscode-r-tutorials extension version, baked from Open VSX (see the
-# extension block near the bottom). Bump deliberately; a bump is an image
-# release. 1.1.0+ lists and runs tutorials through the learnr2 R package,
-# which is therefore baked with the course packages — bump the two together.
-ARG RT_EXT_VERSION=1.1.0
+# VS Code extensions baked into the image from Open VSX (see the extension
+# block near the bottom). ALL of the student-facing extensions are baked
+# since v1.1.7, not just ours, so nothing installs at attach: the Activity
+# Bar is complete from first paint and the "YOUR CODESPACE IS READY" banner
+# is literally true. Bump deliberately; a bump is an image release.
+#  - PPBDS.vscode-r-tutorials: ours. 1.1.0+ lists and runs tutorials through
+#    the learnr2 R package (baked with the course packages — bump together).
+#    1.2.0+ can close VS Code's Welcome tab at startup (launcher setting
+#    rTutorials.closeWelcomeOnStartup).
+#  - REditorSupport.r (vscode-R) 3.x + its hard dependency r-syntax. 3.0
+#    replaced the file-watcher session hookup with the bundled `sess` R
+#    package, which is baked from this exact .vsix (see the sess block) so
+#    students never see the "install sess?" prompt. codespace-starter pins
+#    the SAME version in its extensions list — keep the two in lockstep.
+#  - quarto, Live Server, PDF viewer, Rainbow CSV: the rest of the launcher's
+#    list.
+ARG RT_EXT_VERSION=1.2.0
+ARG VSCODE_R_VERSION=3.0.1
+ARG R_SYNTAX_EXT_VERSION=0.1.4
+ARG QUARTO_EXT_VERSION=1.138.0
+ARG LIVESERVER_EXT_VERSION=5.7.10
+ARG PDF_EXT_VERSION=1.2.2
+ARG RAINBOW_CSV_EXT_VERSION=3.24.1
 
 # System libraries needed by the R stacks below.
 #  - Geospatial: sf, terra, etc.
@@ -232,67 +250,18 @@ USER root
 RUN ln -s /home/rstudio/.cargo/bin/arf /usr/local/bin/arf \
     && ln -s /home/rstudio/.local/bin/agy /usr/local/bin/agy
 
-# ---- vscode-R session-watcher repair for R >= 4.6 ----------------------
-# The vscode-R extension's session watcher attaches by shadowing `.First.sys`
-# in globalenv (its init.R arms the shadow; R's startup is expected to call
-# it after default packages load — the deferred call attaches the watcher and
-# points plot() at httpgd). R 4.6 changed startup to no longer call a
-# globalenv `.First.sys` override (verified empirically 2026-08-13: identical
-# shadow fires on R 4.5.3, never on R 4.6.1 — plain R, no console involved;
-# arf was wrongly suspected first). Without the call, the watcher silently
-# never attaches and every student plot() falls back to the pdf device —
-# Rplots.pdf and no error anywhere.
-#
-# The shim: R still honors the documented `.First()` user hook, which runs
-# after all profiles (site, then user — where vscode-R arms its shadow). So
-# the site profile defines a `.First` that fires an armed globalenv
-# `.First.sys` if present. Non-VS-Code sessions have no armed shadow and the
-# shim is a no-op. A student defining .First in their own .Rprofile would
-# override this (acceptable: intro students don't). Remove when vscode-R
-# ships its own R-4.6 fix (watch REditorSupport/vscode-R).
-RUN cat >> /usr/local/lib/R/etc/Rprofile.site <<'EOF'
-
-# vscode-R session watcher on R >= 4.6: fire the globalenv .First.sys shadow
-# that init.R arms — R 4.6 startup no longer calls it (see the PPBDS/
-# devcontainers Dockerfile). No-op outside VS Code R sessions.
-.First <- function() {
-    fs <- globalenv()$.First.sys
-    if (is.function(fs)) fs()
-}
-EOF
-
-# Smoke test for the shim + the full watcher contract, run against the REAL
-# baked Rprofile.site: a user profile arms a vscode-like .First.sys shadow
-# that sets an httpgd device and plots; `arf headless` (built for CI — the
-# interactive TUI dies in a build querying the cursor position, and `arf -e`
-# skips the full R startup sequence entirely, so neither is a usable harness)
-# must fire the shadow via the site-profile shim. Marker file must appear and
-# no Rplots.pdf may be written. Verified red without the shim on R 4.6.1
-# (3× independently: plain R, arf -e, arf headless) and green with it.
-USER rstudio
-RUN printf '%s\n' \
-        'first_sys_orig <- .First.sys' \
-        '.First.sys <- function() {' \
-        '    first_sys_orig()' \
-        '    options(device = function(...) httpgd::hgd())' \
-        '    plot(1:10)' \
-        '    writeLines("fired", "/tmp/first-sys-fired")' \
-        '}' \
-        > /tmp/vscode-like-profile.R \
- && cd /tmp \
- && rm -f /tmp/first-sys-fired /tmp/Rplots.pdf \
- && { R_PROFILE_USER=/tmp/vscode-like-profile.R timeout 90 arf headless --ipc-bind /tmp/smoke.sock & } \
- && ARF_PID=$! \
- && i=0; while [ $i -lt 45 ] && ! test -f /tmp/first-sys-fired; do sleep 1; i=$((i+1)); done; \
-    kill $ARF_PID 2>/dev/null || true; \
-    { test -f /tmp/first-sys-fired \
-        || { echo "WATCHER SMOKE FAIL: globalenv .First.sys shadow never fired (R 4.6 shim broken?)"; exit 1; }; } \
- && { ! test -e /tmp/Rplots.pdf \
-        || { echo "WATCHER SMOKE FAIL: plot() fell back to the pdf device (Rplots.pdf exists)"; exit 1; }; } \
- && echo "vscode-R watcher contract OK (shim fired, plot routed to httpgd)" \
- && rm -f /tmp/vscode-like-profile.R /tmp/first-sys-fired
-USER root
-# ---- end session-watcher repair ----------------------------------------
+# ---- (REMOVED in v1.1.7) vscode-R session-watcher shim for R >= 4.6 -------
+# v1.1.2–v1.1.6 appended a `.First` to Rprofile.site that fired vscode-R
+# 2.x's globalenv `.First.sys` shadow, because R 4.6 stopped calling it and
+# plots silently fell back to Rplots.pdf. vscode-R 3.0 no longer uses that
+# mechanism at all: its R_PROFILE_USER profile calls `sess::connect()`
+# directly (R/profile.R in the .vsix), so the shim had nothing to fire and
+# was deleted along with its `arf headless` smoke test. The replacement
+# contract is the `sess` bake below: sess must load, and its version must
+# be >= the one bundled in the baked vscode-R, or the extension prompts
+# every student to install it. If plots ever regress to PDFs again, check
+# THAT first (git history at this line has the old shim if 2.x ever returns).
+# -------------------------------------------------------------------------
 
 # pak: fast parallel R package installer, used for every R install below.
 RUN R -q -e 'install.packages("pak", repos = sprintf("https://r-lib.github.io/p/pak/stable/%s/%s/%s", .Platform$pkgType, R.Version()$os, R.Version()$arch))'
@@ -420,6 +389,15 @@ RUN rm -rf /usr/local/lib/R/site-library/_cache \
 # top, not via pak.) Applies to the rstudio-user installs below, to
 # codespace-starter's postCreateCommand, and to runtime installs.
 ENV PKG_SYSREQS=false
+# Silence R's OpenTelemetry layer. shiny/knitr/promises import `otel`, and in
+# the image build every quarto render and learnr call printed a red
+# "OpenTelemetry error: there is no package called 'otelsdk'" (17× per build
+# since at least v1.1.5): something in the build environment names an
+# exporter, otel then tries to load otelsdk, which is not baked. The R-specific
+# variable wins over the generic OTEL_TRACES_EXPORTER, and "none" selects the
+# no-op provider — the same thing otel does when nothing is set. Nobody here
+# wants traces.
+ENV OTEL_R_TRACES_EXPORTER=none
 
 # ── Everything below installs as rstudio, not root ───────────────────────────
 # This is the design fix for a class of permissions bugs: when pak runs as
@@ -712,32 +690,70 @@ RUN mkdir -p /tmp/pysmoke \
 RUN npm install -g @observablehq/framework@1.13.4 && observable --version
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ── R Tutorials VS Code extension (PPBDS.vscode-r-tutorials) ─────────────────
-# Baked into the image, pre-extracted into the VS Code server's extensions
-# dir, so the editor loads it from the very first window paint.
-#  - Why not devcontainer.json's "extensions" list: that list only installs
-#    from the Microsoft Marketplace, and we publish this extension to Open
-#    VSX only (Marketplace publishing is too painful — David, 2026-07).
+# ── VS Code extensions, baked (ours + the launcher's whole list) ─────────────
+# Pre-extracted into the VS Code server's extensions dir, so the editor loads
+# them from the very first window paint and installs NOTHING at attach.
+#  - Why bake rather than list them in devcontainer.json: that list installs
+#    from the Microsoft Marketplace at attach time — a network round trip on
+#    every launch, a ~30 s window where the Activity Bar is incomplete and an
+#    R terminal does not exist yet while the banner already says READY, and
+#    (for ours) a Marketplace that we don't publish to. Open VSX has all of
+#    them. codespace-starter keeps its `extensions` list as well, pinned to
+#    the same versions: VS Code sees them installed and skips the install.
 #  - Why not a vsix install at attach time (tried, in welcome.sh): an
 #    extension installed into an already-running window doesn't surface its
 #    Activity Bar icon until the window reloads — bad first-run UX.
 # A .vsix is a zip with the payload under extension/; the dir name follows
-# VS Code's publisher.name-version convention, which its scanner picks up.
-# NOTE: deliberate exception to "keep the image editor-agnostic" — non-VS-Code
-# consumers simply ignore ~/.vscode-remote. To ship a new extension version:
-# publish to Open VSX, bump RT_EXT_VERSION (top of file), release the image.
+# VS Code's publisher.name-version convention (lowercased), which its scanner
+# picks up. NOTE: deliberate exception to "keep the image editor-agnostic" —
+# non-VS-Code consumers simply ignore ~/.vscode-remote. To ship a new version
+# of ours: publish to Open VSX by hand (`ovsx publish`), bump RT_EXT_VERSION
+# (top of file), release. For the others: bump the ARG, release, and bump the
+# matching pin in codespace-starter's extensions list in the same cycle.
+# The vscode-R .vsix is kept at /tmp/vscode-r-ext for the sess bake below.
 RUN set -eux; \
-    url="https://open-vsx.org/api/PPBDS/vscode-r-tutorials/${RT_EXT_VERSION}/file/PPBDS.vscode-r-tutorials-${RT_EXT_VERSION}.vsix"; \
-    dest="/home/rstudio/.vscode-remote/extensions/ppbds.vscode-r-tutorials-${RT_EXT_VERSION}"; \
-    curl -fsSL -o /tmp/rt.vsix "$url"; \
-    python3 -m zipfile -e /tmp/rt.vsix /tmp/rt-ext; \
-    mkdir -p "$dest"; \
-    cp -R /tmp/rt-ext/extension/. "$dest/"; \
+    for spec in \
+        "PPBDS/vscode-r-tutorials/${RT_EXT_VERSION}" \
+        "REditorSupport/r/${VSCODE_R_VERSION}" \
+        "REditorSupport/r-syntax/${R_SYNTAX_EXT_VERSION}" \
+        "quarto/quarto/${QUARTO_EXT_VERSION}" \
+        "ritwickdey/LiveServer/${LIVESERVER_EXT_VERSION}" \
+        "tomoki1207/pdf/${PDF_EXT_VERSION}" \
+        "mechatroner/rainbow-csv/${RAINBOW_CSV_EXT_VERSION}"; \
+    do \
+        pub="${spec%%/*}"; rest="${spec#*/}"; name="${rest%%/*}"; ver="${rest#*/}"; \
+        url="https://open-vsx.org/api/${pub}/${name}/${ver}/file/${pub}.${name}-${ver}.vsix"; \
+        dest="/home/rstudio/.vscode-remote/extensions/$(printf '%s.%s-%s' "$pub" "$name" "$ver" | tr '[:upper:]' '[:lower:]')"; \
+        curl -fsSL -o /tmp/ext.vsix "$url"; \
+        rm -rf /tmp/ext; python3 -m zipfile -e /tmp/ext.vsix /tmp/ext; \
+        mkdir -p "$dest"; cp -R /tmp/ext/extension/. "$dest/"; \
+        test -f "$dest/package.json"; \
+        python3 -c "import json, sys; v = json.load(open('$dest/package.json'))['version']; sys.exit(0 if v == '$ver' else ('unexpected version for $pub.$name: ' + v))"; \
+        if [ "$pub.$name" = "REditorSupport.r" ]; then rm -rf /tmp/vscode-r-ext; mv /tmp/ext /tmp/vscode-r-ext; fi; \
+        rm -rf /tmp/ext.vsix /tmp/ext; \
+        echo "EXTENSION $pub.$name $ver OK"; \
+    done; \
     chown -R rstudio:rstudio /home/rstudio/.vscode-remote; \
-    rm -rf /tmp/rt.vsix /tmp/rt-ext; \
-    test -f "$dest/package.json"; \
-    python3 -c "import json, sys; v = json.load(open('$dest/package.json'))['version']; sys.exit(0 if v == '$RT_EXT_VERSION' else ('unexpected extension version: ' + v))"; \
-    echo "R-TUTORIALS EXTENSION ${RT_EXT_VERSION} OK"
+    ls /home/rstudio/.vscode-remote/extensions
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── sess: vscode-R 3.x's session bridge, baked from the SAME .vsix ───────────
+# vscode-R >= 3.0 talks to an R session through its bundled `sess` R package
+# (not on CRAN; r-universe has it, but at whatever version is current). At
+# every R-terminal start the extension compares the installed sess version
+# with the one in its own .vsix and, if installed < bundled, prompts "install
+# sess?" (src/util.ts promptToInstallSessPackage) — a prompt students must
+# never see. Installing from the .vsix's own sess/ directory makes the two
+# versions identical by construction. Imports (processx, later, jsonlite,
+# rstudioapi) come from P3M first so R CMD INSTALL never reaches for CRAN.
+# Installed as rstudio into site-library like every other R package here.
+USER rstudio
+RUN R -q -e 'pak::pkg_install(c("processx", "later", "jsonlite", "rstudioapi"))' \
+ && R CMD INSTALL /tmp/vscode-r-ext/extension/sess \
+ && R --vanilla -e 'stopifnot(requireNamespace("sess", quietly = TRUE)); b <- read.dcf("/tmp/vscode-r-ext/extension/sess/DESCRIPTION", "Version")[[1]]; i <- as.character(utils::packageVersion("sess")); if (utils::compareVersion(i, b) < 0) stop("baked sess ", i, " is OLDER than the bundled ", b, " — the extension would prompt to install"); cat("SESS", i, "OK (bundled", b, ")\n")' \
+ && R --vanilla -e 'stopifnot(requireNamespace("httpgd", quietly = TRUE)); cat("httpgd (r.plot.backend) OK\n")'
+USER root
+RUN rm -rf /tmp/vscode-r-ext
 # ─────────────────────────────────────────────────────────────────────────────
 
 # NOTE — no Workspace Trust pre-seed. v1.1.5 baked a user settings.json with
@@ -775,8 +791,8 @@ RUN test -f /usr/local/etc/vscode-dev-containers/first-run-notice.txt \
 # opens a SECOND browser tab of the same Codespace (quarto-cli create/cmd.ts
 # resolveEditor; verified 2026-09-17). `--no-open` prevents it. A blanket
 # alias is wrong (`render`/`preview`/`publish` reject unknown options), so a
-# bash FUNCTION appends `--no-open` only to `create`, and only when neither
-# `--open` nor `--no-open` was given. Interactive shells only (/etc/bash.bashrc
+# bash FUNCTION appends `--no-open` only to `create`, and only when none of
+# `--open`, `--open=<editor>` or `--no-open` was given (Copilot, PR #35). Interactive shells only (/etc/bash.bashrc
 # is read by interactive non-login shells, i.e. VS Code terminals;
 # /etc/profile.d is NOT) — the Quarto VS Code extension execs the binary by
 # path and is unaffected. The tutorials show the flag explicitly anyway, so
@@ -787,7 +803,7 @@ RUN cat >> /etc/bash.bashrc <<'EOF'
 quarto() {
     if [ "${1-}" = "create" ]; then
         for a in "$@"; do
-            case "$a" in --open|--no-open) command quarto "$@"; return ;; esac
+            case "$a" in --open|--open=*|--no-open) command quarto "$@"; return ;; esac
         done
         command quarto "$@" --no-open
     else
