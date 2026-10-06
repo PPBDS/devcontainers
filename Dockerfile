@@ -445,7 +445,7 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # shipped fails to load with "object 'attr' is not exported by
 # 'namespace:xfun'".
 #
-# dependencies = TRUE additionally installs each of the four packages'
+# dependencies = TRUE additionally installs each of the five packages'
 # Suggests (top-level only, not Suggests-of-Suggests). This is the
 # contract (2026-07): a tutorial package's Suggests list IS the set of
 # packages students need at tutorial runtime. Tutorials load them with
@@ -466,28 +466,30 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # the course packages, same refresh knob) is what the R Tutorials VS Code
 # extension (RT_EXT_VERSION >= 1.1.0) calls to list and run tutorials:
 # learnr2::available_tutorials() and learnr2::run_tutorial(), which hands a
-# classic learnr tutorial to learnr. No course package depends on it yet, so
-# it is named here explicitly; without it the Tutorials panel is dead.
-ARG COURSE_PKG_REFRESH=2026-10-05
+# classic learnr tutorial to learnr. ims.tutorials (added 2026-10-06, the
+# IMS companion course, built on learnr2) Imports it, but it is still named
+# here explicitly so the Tutorials panel works even if that ever changes.
+ARG COURSE_PKG_REFRESH=2026-10-06
 RUN echo "course-package refresh: ${COURSE_PKG_REFRESH}" \
  && R -q -e 'pak::pkg_install(c( \
         "PPBDS/tutorial.helpers", \
         "PPBDS/vscode.tutorials", \
         "PPBDS/misc.tutorials", \
         "PPBDS/primer.tutorials", \
+        "PPBDS/ims.tutorials", \
         "PPBDS/learnr2" \
     ), upgrade = TRUE, dependencies = TRUE)'
 
 # Smoke test 1: every baked-in package and the learnr/knitr/rmarkdown
 # chain must all load. The original learnr/xfun ABI mismatch failure
 # would have been caught here at build time.
-RUN R --vanilla -e 'for (p in c("tutorial.helpers", "vscode.tutorials", "misc.tutorials", "primer.tutorials", "learnr2", "learnr", "knitr", "rmarkdown")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)'
+RUN R --vanilla -e 'for (p in c("tutorial.helpers", "vscode.tutorials", "misc.tutorials", "primer.tutorials", "ims.tutorials", "learnr2", "learnr", "knitr", "rmarkdown")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)'
 
-# Smoke test 1b: every Suggests of the four course packages must load —
+# Smoke test 1b: every Suggests of the five course packages must load —
 # Suggests is the ships-to-students contract (see the install block
 # above). Reads the lists from the installed DESCRIPTIONs, so it
 # self-maintains as those repos curate their Suggests.
-RUN R --vanilla -e 'for (p in c("tutorial.helpers", "vscode.tutorials", "misc.tutorials", "primer.tutorials")) { s <- utils::packageDescription(p, fields = "Suggests"); if (is.na(s)) next; deps <- trimws(sub("[(].*", "", strsplit(s, ",")[[1]])); for (d in deps[nzchar(deps)]) if (!requireNamespace(d, quietly = TRUE)) stop("Suggests smoke test: ", d, " (suggested by ", p, ") failed to load") }'
+RUN R --vanilla -e 'for (p in c("tutorial.helpers", "vscode.tutorials", "misc.tutorials", "primer.tutorials", "ims.tutorials")) { s <- utils::packageDescription(p, fields = "Suggests"); if (is.na(s)) next; deps <- trimws(sub("[(].*", "", strsplit(s, ",")[[1]])); for (d in deps[nzchar(deps)]) if (!requireNamespace(d, quietly = TRUE)) stop("Suggests smoke test: ", d, " (suggested by ", p, ") failed to load") }'
 
 # Smoke test 2: rstudio can install a fresh package into site-library
 # without permission errors. Catches the "root-built image leaves
