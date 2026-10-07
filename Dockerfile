@@ -85,7 +85,7 @@ ARG AIDER_VERSION=0.86.2
 #    the SAME version in its extensions list — keep the two in lockstep.
 #  - quarto, Live Server, PDF viewer, Rainbow CSV: the rest of the launcher's
 #    list.
-ARG RT_EXT_VERSION=1.2.0
+ARG RT_EXT_VERSION=1.2.1
 ARG VSCODE_R_VERSION=3.0.1
 ARG R_SYNTAX_EXT_VERSION=0.1.4
 ARG QUARTO_EXT_VERSION=1.138.0
@@ -469,7 +469,13 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # classic learnr tutorial to learnr. ims.tutorials (added 2026-10-06, the
 # IMS companion course, built on learnr2) Imports it, but it is still named
 # here explicitly so the Tutorials panel works even if that ever changes.
-ARG COURSE_PKG_REFRESH=2026-10-06
+# learnr2 is ALWAYS the latest GitHub HEAD (David, 2026-10-07): it has no
+# releases, the course moves with it, and the pre-render step further down
+# needs its newest API (prerender_tutorials, 2026-10-07) — so every release
+# that should pick up learnr2 changes bumps COURSE_PKG_REFRESH below. (The
+# classic rstudio/learnr stays whatever CRAN/P3M ships; its GitHub dev
+# version has had no commits beyond CRAN 0.11.6 since 2025-11.)
+ARG COURSE_PKG_REFRESH=2026-10-07
 RUN echo "course-package refresh: ${COURSE_PKG_REFRESH}" \
  && R -q -e 'pak::pkg_install(c( \
         "PPBDS/tutorial.helpers", \
@@ -490,6 +496,21 @@ RUN R --vanilla -e 'for (p in c("tutorial.helpers", "vscode.tutorials", "misc.tu
 # above). Reads the lists from the installed DESCRIPTIONs, so it
 # self-maintains as those repos curate their Suggests.
 RUN R --vanilla -e 'for (p in c("tutorial.helpers", "vscode.tutorials", "misc.tutorials", "primer.tutorials", "ims.tutorials")) { s <- utils::packageDescription(p, fields = "Suggests"); if (is.na(s)) next; deps <- trimws(sub("[(].*", "", strsplit(s, ",")[[1]])); for (d in deps[nzchar(deps)]) if (!requireNamespace(d, quietly = TRUE)) stop("Suggests smoke test: ", d, " (suggested by ", p, ") failed to load") }'
+
+# Pre-render every Quarto tutorial (ims.tutorials and learnr2's own) into
+# the rstudio user's learnr2 render cache, ~/.cache/R/learnr2. Rendering one
+# of these takes 8-30 s on Codespaces hardware; learnr2::run_tutorial()
+# reuses a cached render for as long as the installed tutorial files and
+# the learnr2 version are unchanged, and both are baked into this image
+# right alongside the cache, so every student's first launch of every
+# tutorial is instant. Runs as rstudio (this whole section does) with HOME
+# pinned, because tools::R_user_dir() resolves the cache under $HOME and
+# the cache is only useful under the home the runtime user actually gets.
+# Doubles as a build-time check that every bundled Quarto tutorial renders.
+# Classic learnr (.Rmd) tutorials are Shiny apps with nothing to cache.
+RUN HOME=/home/rstudio R -q -e 'learnr2::prerender_tutorials()' \
+ && test -f /home/rstudio/.cache/R/learnr2/learnr2/hello-learnr2/index.html \
+ && echo "learnr2 pre-render OK"
 
 # Smoke test 2: rstudio can install a fresh package into site-library
 # without permission errors. Catches the "root-built image leaves
