@@ -474,8 +474,10 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # needs its newest API (prerender_tutorials, 2026-10-07) — so every release
 # that should pick up learnr2 changes bumps COURSE_PKG_REFRESH below. (The
 # classic rstudio/learnr stays whatever CRAN/P3M ships; its GitHub dev
-# version has had no commits beyond CRAN 0.11.6 since 2025-11.)
-ARG COURSE_PKG_REFRESH=2026-10-07
+# version has had no commits beyond CRAN 0.11.6 since 2025-11.) The knob
+# only has to CHANGE: a second refresh on the same day takes a suffix
+# (2026-10-07-2) — repeating the date would be a cache hit (v1.2.1).
+ARG COURSE_PKG_REFRESH=2026-10-07-2
 RUN echo "course-package refresh: ${COURSE_PKG_REFRESH}" \
  && R -q -e 'pak::pkg_install(c( \
         "PPBDS/tutorial.helpers", \
