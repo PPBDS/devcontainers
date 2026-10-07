@@ -478,8 +478,16 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # only has to CHANGE: a second refresh on the same day takes a suffix
 # (2026-10-07-2) — repeating the date would be a cache hit (v1.2.1).
 ARG COURSE_PKG_REFRESH=2026-10-07-2
+# Dependencies come from the DATED P3M snapshot (P3M_SNAPSHOT, like the
+# modeling and inference blocks), not the floating "latest" channel. The
+# floating channel is not atomic while P3M syncs a new CRAN release: on
+# 2026-10-07 its index still resolved renv to 1.3.0 while the 1.3.0 binary
+# had already been replaced by 1.3.1, so pak's download 404'd and, because
+# pak aborts on any single miss, the whole build failed twice in a row. A
+# snapshot is immutable. (The course packages themselves still come from
+# GitHub HEAD; only their CRAN dependencies are pinned to the snapshot.)
 RUN echo "course-package refresh: ${COURSE_PKG_REFRESH}" \
- && R -q -e 'pak::pkg_install(c( \
+ && R -q -e 'options(repos = c(P3M = "https://packagemanager.posit.co/cran/__linux__/noble/'"${P3M_SNAPSHOT}"'")); pak::pkg_install(c( \
         "PPBDS/tutorial.helpers", \
         "PPBDS/vscode.tutorials", \
         "PPBDS/misc.tutorials", \
