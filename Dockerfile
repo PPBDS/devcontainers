@@ -85,7 +85,7 @@ ARG AIDER_VERSION=0.86.2
 #    the SAME version in its extensions list — keep the two in lockstep.
 #  - quarto, Live Server, PDF viewer, Rainbow CSV: the rest of the launcher's
 #    list.
-ARG RT_EXT_VERSION=1.2.1
+ARG RT_EXT_VERSION=1.3.0
 ARG VSCODE_R_VERSION=3.0.1
 ARG R_SYNTAX_EXT_VERSION=0.1.4
 ARG QUARTO_EXT_VERSION=1.138.0
@@ -490,7 +490,7 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # version has had no commits beyond CRAN 0.11.6 since 2025-11.) The knob
 # only has to CHANGE: a second refresh on the same day takes a suffix
 # (2026-10-07-2) — repeating the date would be a cache hit (v1.2.1).
-ARG COURSE_PKG_REFRESH=2026-10-08-3
+ARG COURSE_PKG_REFRESH=2026-10-09
 # Dependencies come from the DATED P3M snapshot (P3M_SNAPSHOT, like the
 # modeling and inference blocks), not the floating "latest" channel. The
 # floating channel is not atomic while P3M syncs a new CRAN release: on
