@@ -85,7 +85,7 @@ ARG AIDER_VERSION=0.86.2
 #    the SAME version in its extensions list — keep the two in lockstep.
 #  - quarto, Live Server, PDF viewer, Rainbow CSV: the rest of the launcher's
 #    list.
-ARG RT_EXT_VERSION=1.2.1
+ARG RT_EXT_VERSION=1.3.0
 ARG VSCODE_R_VERSION=3.0.1
 ARG R_SYNTAX_EXT_VERSION=0.1.4
 ARG QUARTO_EXT_VERSION=1.138.0
@@ -431,9 +431,13 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # data package the primer BOOK needs — PPBDS/primer's devcontainer runs on
 # this image). tutorial.helpers and primer.tutorials were DROPPED
 # (2026-10-08, David): their classic learnr .Rmd tutorials are retired for
-# students. learnr itself STAYS — learnr2 Suggests it (classic .Rmd
-# tutorials are handed to learnr::run_tutorial()), so it arrives via
-# dependencies = TRUE below.
+# students. learnr itself is GONE too since v1.2.6 (David, 2026-10-09):
+# every remaining course package is Quarto, and the R Tutorials extension
+# (>= 1.3.0) shows only the tutorials the installed packages can run. It
+# used to arrive only because learnr2 SUGGESTS it (for classic .Rmd
+# tutorials) and learnr2 was named in the dependencies = TRUE call — so
+# learnr2 is now installed in a separate call for its HARD dependencies
+# only. A smoke test below fails the build if learnr comes back.
 #
 # NONE of these are refreshed at Codespace create anymore (the live
 # primer.tutorials refresh was retired 2026-07-30; codespace-starter keeps
@@ -486,7 +490,7 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # version has had no commits beyond CRAN 0.11.6 since 2025-11.) The knob
 # only has to CHANGE: a second refresh on the same day takes a suffix
 # (2026-10-07-2) — repeating the date would be a cache hit (v1.2.1).
-ARG COURSE_PKG_REFRESH=2026-10-08-3
+ARG COURSE_PKG_REFRESH=2026-10-09
 # Dependencies come from the DATED P3M snapshot (P3M_SNAPSHOT, like the
 # modeling and inference blocks), not the floating "latest" channel. The
 # floating channel is not atomic while P3M syncs a new CRAN release: on
@@ -500,14 +504,16 @@ RUN echo "course-package refresh: ${COURSE_PKG_REFRESH}" \
         "PPBDS/vscode.tutorials", \
         "PPBDS/misc.tutorials", \
         "PPBDS/ims.tutorials", \
-        "PPBDS/learnr2", \
         "PPBDS/primer.data" \
-    ), upgrade = TRUE, dependencies = TRUE)'
+    ), upgrade = TRUE, dependencies = TRUE)' \
+ && R -q -e 'options(repos = c(P3M = "https://packagemanager.posit.co/cran/__linux__/noble/'"${P3M_SNAPSHOT}"'")); pak::pkg_install("PPBDS/learnr2", upgrade = TRUE)'
 
-# Smoke test 1: every baked-in package and the learnr/knitr/rmarkdown
-# chain must all load. The original learnr/xfun ABI mismatch failure
-# would have been caught here at build time.
-RUN R --vanilla -e 'for (p in c("vscode.tutorials", "misc.tutorials", "ims.tutorials", "learnr2", "primer.data", "learnr", "knitr", "rmarkdown")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)'
+# Smoke test 1: every baked-in package and the knitr/rmarkdown chain must
+# all load. (The original learnr/xfun ABI mismatch failure would have been
+# caught here at build time.) And learnr must NOT be installed: nothing in
+# the course needs it, and if a future dependency quietly pulled it back,
+# the Tutorials panel would start listing classic tutorials again.
+RUN R --vanilla -e 'for (p in c("vscode.tutorials", "misc.tutorials", "ims.tutorials", "learnr2", "primer.data", "knitr", "rmarkdown")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p); if (requireNamespace("learnr", quietly = TRUE)) stop("learnr is installed but should not be: something pulled it back in (check the course packages and learnr2 dependencies)"); cat("course packages OK, learnr absent\n")'
 
 # Smoke test 1b: every Suggests of the course packages must load —
 # Suggests is the ships-to-students contract (see the install block
