@@ -27,7 +27,7 @@ Replace `X.Y.Z` with the latest tag from the [releases page](https://github.com/
 
 ## What's inside
 
-- **R** — the rocker/tidyverse foundation, the PPBDS course packages (`tutorial.helpers`, `vscode.tutorials`, `misc.tutorials`, `primer.tutorials`, `ims.tutorials`), the `arf` console, Quarto, `httpgd`, and `pak`.
+- **R** — the rocker/tidyverse foundation, the PPBDS course packages (`vscode.tutorials`, `misc.tutorials`, `ims.tutorials`, all Quarto tutorials on `learnr2`), `learnr2` itself, `primer.data` (for the primer book), the `arf` console, Quarto, `httpgd`, and `pak`.
 - **Modeling** — `tidymodels` plus engines (`xgboost`, `lightgbm`, `catboost`, `randomForest`, `ranger`, `glmnet`, `bonsai`) and `brms` for Bayesian regression via Stan.
 - **Inference reporting & presentation** — `gt`, `marginaleffects`, `patchwork`, `easystats` (used throughout the primer book and tutorials).
 - **Mapping / census** — `sf` + `tidycensus` (with `tigris`) for census-tract maps, plus the [Kyle Walker](https://walker-data.com) toolkit: `mapgl` (token-free WebGL vector maps via MapLibre + CARTO styles), `crsuggest`, and `idbr`. Live census queries need a [free Census API key](https://api.census.gov/data/key_signup.html).
