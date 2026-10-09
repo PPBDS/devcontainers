@@ -96,7 +96,7 @@ ARG RAINBOW_CSV_EXT_VERSION=3.24.1
 # System libraries needed by the R stacks below.
 #  - Geospatial: sf, terra, etc.
 #  - text shaping libs: ragg / textshaping (modern ggplot2 graphics)
-#  - cmake: build tool for source packages like fs (pulled in by primer.tutorials)
+#  - cmake: build tool for source packages like fs (pulled in by the course packages)
 #  - libuv1-dev: fs >= 2.1.0 declares libuv as a sysreq. The P3M binary works
 #    without it, but pak prints a phantom "✖ Missing 1 system package:
 #    libuv1-dev" on every install that touches fs (i.e. nearly all of them) —
@@ -426,9 +426,18 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # the development version, not whatever an r-universe build cycle (or
 # CRAN) most recently blessed.
 #
-# NONE of these four are refreshed at Codespace create anymore (the live
+# Since v1.2.5 the set is: vscode.tutorials, misc.tutorials, ims.tutorials
+# (all Quarto tutorials on learnr2), learnr2 itself, and primer.data (the
+# data package the primer BOOK needs — PPBDS/primer's devcontainer runs on
+# this image). tutorial.helpers and primer.tutorials were DROPPED
+# (2026-10-08, David): their classic learnr .Rmd tutorials are retired for
+# students. learnr itself STAYS — learnr2 Suggests it (classic .Rmd
+# tutorials are handed to learnr::run_tutorial()), so it arrives via
+# dependencies = TRUE below.
+#
+# NONE of these are refreshed at Codespace create anymore (the live
 # primer.tutorials refresh was retired 2026-07-30; codespace-starter keeps
-# the recipe dormant in its devcontainer.json). All four ship at whatever
+# the recipe dormant in its devcontainer.json). All of them ship at whatever
 # versions this image baked; updates reach students via the next image
 # release + pin bump. If the dormant refresh is ever revived, the baked
 # copies keep it a quick single-package update (deps pre-installed) and
@@ -445,7 +454,7 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # shipped fails to load with "object 'attr' is not exported by
 # 'namespace:xfun'".
 #
-# dependencies = TRUE additionally installs each of the five packages'
+# dependencies = TRUE additionally installs each of the named packages'
 # Suggests (top-level only, not Suggests-of-Suggests). This is the
 # contract (2026-07): a tutorial package's Suggests list IS the set of
 # packages students need at tutorial runtime. Tutorials load them with
@@ -488,26 +497,25 @@ ARG COURSE_PKG_REFRESH=2026-10-08-3
 # GitHub HEAD; only their CRAN dependencies are pinned to the snapshot.)
 RUN echo "course-package refresh: ${COURSE_PKG_REFRESH}" \
  && R -q -e 'options(repos = c(P3M = "https://packagemanager.posit.co/cran/__linux__/noble/'"${P3M_SNAPSHOT}"'")); pak::pkg_install(c( \
-        "PPBDS/tutorial.helpers", \
         "PPBDS/vscode.tutorials", \
         "PPBDS/misc.tutorials", \
-        "PPBDS/primer.tutorials", \
         "PPBDS/ims.tutorials", \
-        "PPBDS/learnr2" \
+        "PPBDS/learnr2", \
+        "PPBDS/primer.data" \
     ), upgrade = TRUE, dependencies = TRUE)'
 
 # Smoke test 1: every baked-in package and the learnr/knitr/rmarkdown
 # chain must all load. The original learnr/xfun ABI mismatch failure
 # would have been caught here at build time.
-RUN R --vanilla -e 'for (p in c("tutorial.helpers", "vscode.tutorials", "misc.tutorials", "primer.tutorials", "ims.tutorials", "learnr2", "learnr", "knitr", "rmarkdown")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)'
+RUN R --vanilla -e 'for (p in c("vscode.tutorials", "misc.tutorials", "ims.tutorials", "learnr2", "primer.data", "learnr", "knitr", "rmarkdown")) if (!requireNamespace(p, quietly = TRUE)) stop("smoke test failed to load: ", p)'
 
-# Smoke test 1b: every Suggests of the five course packages must load —
+# Smoke test 1b: every Suggests of the course packages must load —
 # Suggests is the ships-to-students contract (see the install block
 # above). Reads the lists from the installed DESCRIPTIONs, so it
 # self-maintains as those repos curate their Suggests.
-RUN R --vanilla -e 'for (p in c("tutorial.helpers", "vscode.tutorials", "misc.tutorials", "primer.tutorials", "ims.tutorials")) { s <- utils::packageDescription(p, fields = "Suggests"); if (is.na(s)) next; deps <- trimws(sub("[(].*", "", strsplit(s, ",")[[1]])); for (d in deps[nzchar(deps)]) if (!requireNamespace(d, quietly = TRUE)) stop("Suggests smoke test: ", d, " (suggested by ", p, ") failed to load") }'
+RUN R --vanilla -e 'for (p in c("vscode.tutorials", "misc.tutorials", "ims.tutorials")) { s <- utils::packageDescription(p, fields = "Suggests"); if (is.na(s)) next; deps <- trimws(sub("[(].*", "", strsplit(s, ",")[[1]])); for (d in deps[nzchar(deps)]) if (!requireNamespace(d, quietly = TRUE)) stop("Suggests smoke test: ", d, " (suggested by ", p, ") failed to load") }'
 
-# Pre-render every Quarto tutorial (ims.tutorials and learnr2's own) into
+# Pre-render every Quarto tutorial (all three course packages and learnr2's own) into
 # the rstudio user's learnr2 render cache, ~/.cache/R/learnr2. Rendering one
 # of these takes 8-30 s on Codespaces hardware; learnr2::run_tutorial()
 # reuses a cached render for as long as the installed tutorial files and
@@ -936,8 +944,10 @@ RUN set -eux; \
     quarto render p.qmd --to html; test -s p.html; echo "QUARTO-PY OK"; \
     cd /; rm -rf "$d"
 
-# (c) The course tutorials must be discoverable (catches a broken tutorial pkg).
-RUN R --vanilla -e 'ts <- learnr::available_tutorials("tutorial.helpers"); if (!("getting-started" %in% ts$name)) stop("getting-started tutorial not found"); cat("TUTORIALS OK:", paste(ts$name, collapse = ", "), "\n")'
+# (c) Every course package's tutorials must be discoverable through learnr2,
+# the way the R Tutorials extension lists them (catches a broken tutorial
+# pkg). Was learnr::available_tutorials("tutorial.helpers") until v1.2.5.
+RUN R --vanilla -e 'for (p in c("vscode.tutorials", "misc.tutorials", "ims.tutorials")) { ts <- learnr2::available_tutorials(package = p); if (nrow(ts) == 0) stop("no tutorials found in ", p); cat("TUTORIALS OK:", p, nrow(ts), "\n") }'
 
 # (d) The R Tutorials extension's own listing call must work: it runs exactly
 # this (src/extension.ts) to fill the Tutorials panel. A learnr2 that loads
