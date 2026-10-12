@@ -14,9 +14,9 @@
 #                     extension drive)
 #
 # Top-level pins. The fully-resolved tree (transitive deps) is locked in
-# student/requirements.lock (generated via `uv pip compile`, which the image
-# installs from). Edit this file and recompile to bump.
-numpy==2.5.3
+# requirements.lock next to this file (generated via `uv pip compile`, which
+# the image installs from). Edit this file and recompile to bump.
+numpy==2.5.4
 pandas==3.0.6
 matplotlib==3.11.2
 seaborn==0.13.2
@@ -40,5 +40,5 @@ shinylive==0.8.12
 # FFMpegWriter uses the apt-installed ffmpeg CLI instead; see the Dockerfile.)
 Pillow==12.3.0
 scikit-image==0.26.0
-imageio==2.38.0
+imageio==2.38.1
 imageio-ffmpeg==0.6.0
