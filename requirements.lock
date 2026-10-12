@@ -96,7 +96,7 @@ idna==3.18
     #   httpx
     #   jsonschema
     #   requests
-imageio==2.38.0
+imageio==2.38.1
     # via
     #   -r requirements.txt
     #   scikit-image
@@ -258,7 +258,7 @@ notebook-shim==0.2.4
     # via
     #   jupyterlab
     #   notebook
-numpy==2.5.3
+numpy==2.5.4
     # via
     #   -r requirements.txt
     #   contourpy

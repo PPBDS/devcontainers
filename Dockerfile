@@ -43,7 +43,7 @@ ENV OTEL_R_TRACES_EXPORTER=none
 # daily) when a release should pick up newer CRAN versions of those stacks.
 ARG P3M_SNAPSHOT=2026-10-03
 
-ARG QUARTO_VERSION=1.10.18
+ARG QUARTO_VERSION=1.10.19
 # GitHub CLI. Pinned via the release .deb, NOT apt: the cli.github.com apt
 # repo serves exactly ONE version (the current one), so an apt pin like
 # `gh=2.102.0` would fail the build the day the next gh ships. Unpinned until
@@ -55,16 +55,16 @@ ARG GH_VERSION=2.102.0
 # rolled back to 0.3.4 on a branch; exonerated by a version matrix — the real
 # culprit is R 4.6's startup no longer calling a globalenv .First.sys
 # override. See the .First shim + smoke test after the arf install.)
-ARG ARF_VERSION=0.5.3
+ARG ARF_VERSION=0.6.0
 ARG NODE_MAJOR=24
 
 # AI CLI versions. Pinned so builds are reproducible and the baked version
 # doesn't silently drift behind the registry. Bump deliberately, like
 # Quarto/arf. (Antigravity CLI is the exception — its installer offers no
 # version pin, so `agy` floats; see the agy install block below.)
-ARG CLAUDE_CODE_VERSION=2.1.289
-ARG CODEX_VERSION=0.160.0
-ARG GROK_VERSION=1.0.46
+ARG CLAUDE_CODE_VERSION=2.1.296
+ARG CODEX_VERSION=0.162.1
+ARG GROK_VERSION=1.0.50
 # aider is pip-distributed; pinned like the npm CLIs (it floated unpinned
 # until v1.0.8 — the one exception with a pin mechanism available).
 ARG AIDER_VERSION=0.86.2
@@ -147,7 +147,7 @@ RUN arch="$(dpkg --print-architecture)"; \
     rm /tmp/gh.deb; \
     gh --version | grep -F "gh version ${GH_VERSION}"
 
-# AI coding-assistant CLIs. Four tools spanning several providers and billing
+# AI coding-assistant CLIs. Five tools spanning several providers and billing
 # models (aider is itself multi-provider). Students choose which to use. The
 # recommended way to authenticate is to SIGN IN on first run with the matching
 # account (a flat-rate plan, not metered API calls); an API key supplied via
@@ -183,7 +183,7 @@ RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash - \
 #   (2) NodeSource's nodejs (installed just above) ships overlapping files and
 #       removes any distro libnode-dev, so it can't be present anyway.
 # Without this, pak prints "✖ Missing 1 system package: libnode-dev" on every
-# student install that pulls in V8 (gt, primer.tutorials, …) — alarming noise
+# student install that pulls in V8 (gt, …) — alarming noise
 # for beginners, even though nothing is actually missing. A metadata-only
 # package that Provides libnode-dev/libv8-dev satisfies pak's check the
 # canonical Debian way; it ships no files, so it coexists with NodeSource
@@ -240,8 +240,8 @@ RUN set -eux; \
 
 # Per-user installers, run as rstudio so their binaries land under
 # /home/rstudio (arf in ~/.cargo/bin, agy in ~/.local/bin):
-#  - arf: Rust-based R console. Path matches what consumer devcontainer.json
-#    files reference as r.rterm.linux.
+#  - arf: Rust-based R console. Consumer devcontainer.json files reference it
+#    as r.consolePath (the vscode-R 3.0 name; r.rterm.linux is deprecated).
 #  - agy: Antigravity CLI, Google's terminal coding agent and the successor to
 #    the now-EOL'd Gemini CLI. NOTE: its installer offers NO version pin (always
 #    latest), so unlike every other tool here agy floats with each image
@@ -307,8 +307,7 @@ RUN R -q -e "options(repos = c(P3M = 'https://packagemanager.posit.co/cran/__lin
 # in no tutorial package's Suggests) and as belt-and-suspenders for the
 # rest:
 #   - gt              : presentation-quality tables (1,100+ gt:: calls in the
-#                       book; was previously present only transitively via
-#                       primer.tutorials' Imports — now a deliberate choice)
+#                       book; a deliberate choice, not a transitive arrival)
 #   - marginaleffects : predictions/comparisons/slopes from fitted models —
 #                       the book's standard post-estimation workflow
 #   - patchwork       : ggplot composition ("p1 + p2")
@@ -440,17 +439,15 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # only. A smoke test below fails the build if learnr comes back.
 #
 # NONE of these are refreshed at Codespace create anymore (the live
-# primer.tutorials refresh was retired 2026-07-30; codespace-starter keeps
-# the recipe dormant in its devcontainer.json). All of them ship at whatever
+# at-create refresh was retired 2026-07-30; codespace-starter keeps the
+# recipe dormant in its devcontainer.json). All of them ship at whatever
 # versions this image baked; updates reach students via the next image
 # release + pin bump. If the dormant refresh is ever revived, the baked
 # copies keep it a quick single-package update (deps pre-installed) and
 # remain the fallback if GitHub is unreachable at create time.
-# Note primer.tutorials was SPLIT OUT of the primer repo
-# (2026-07): as a subdir install ("PPBDS/primer/primer.tutorials") every
-# install downloaded the full ~183 MB primer tarball — book, class
-# exercises — to deliver a ~4 MB package, at every image build AND every
-# Codespace create. Do not point this back at the subdir path.
+# (Install packages from their OWN repos, never as a subdir of a bigger one:
+# a "PPBDS/<repo>/<subdir>" spec downloads the whole repo tarball on every
+# build and every create — ~183 MB for a ~4 MB package, in 2026-07.)
 #
 # upgrade = TRUE forces pak to pull the latest version of every
 # transitive dep (learnr, knitr, rmarkdown, xfun, ...). Without this, a
@@ -470,7 +467,7 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # below loads each one.
 # CACHE-BUST KNOB. Docker caches RUN layers by instruction text, so a rebuild
 # with no Dockerfile change reuses this layer and silently ships STALE course
-# packages — a "refresh primer.tutorials" release completed in 28 s as a full
+# packages — a course-package refresh release completed in 28 s as a full
 # cache hit (2026-07-27) and delivered bit-identical bits. Bump this date in
 # any release whose purpose is picking up new course-package commits from
 # GitHub HEAD; layers above stay cached, this one and everything after rebuild.
@@ -490,7 +487,7 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # version has had no commits beyond CRAN 0.11.6 since 2025-11.) The knob
 # only has to CHANGE: a second refresh on the same day takes a suffix
 # (2026-10-07-2) — repeating the date would be a cache hit (v1.2.1).
-ARG COURSE_PKG_REFRESH=2026-10-09
+ARG COURSE_PKG_REFRESH=2026-10-12
 # Dependencies come from the DATED P3M snapshot (P3M_SNAPSHOT, like the
 # modeling and inference blocks), not the floating "latest" channel. The
 # floating channel is not atomic while P3M syncs a new CRAN release: on
@@ -628,7 +625,7 @@ USER root
 # We still set RETICULATE_PYTHON so that IF someone installs R's reticulate
 # (not baked in) it bridges to this same venv rather than a separate Python.
 # uv's own binary is copied from its official pinned image (pinned, unlike agy).
-COPY --from=ghcr.io/astral-sh/uv:0.12.3 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.13.0 /uv /usr/local/bin/uv
 COPY requirements.lock /tmp/requirements.lock
 COPY requirements.txt /tmp/requirements.txt
 
