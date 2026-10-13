@@ -64,7 +64,7 @@ ARG NODE_MAJOR=24
 # version pin, so `agy` floats; see the agy install block below.)
 ARG CLAUDE_CODE_VERSION=2.1.296
 ARG CODEX_VERSION=0.162.1
-ARG GROK_VERSION=1.0.50
+ARG GROK_VERSION=1.0.52
 # aider is pip-distributed; pinned like the npm CLIs (it floated unpinned
 # until v1.0.8 — the one exception with a pin mechanism available).
 ARG AIDER_VERSION=0.86.2
@@ -487,7 +487,7 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # version has had no commits beyond CRAN 0.11.6 since 2025-11.) The knob
 # only has to CHANGE: a second refresh on the same day takes a suffix
 # (2026-10-07-2) — repeating the date would be a cache hit (v1.2.1).
-ARG COURSE_PKG_REFRESH=2026-10-12
+ARG COURSE_PKG_REFRESH=2026-10-13
 # Dependencies come from the DATED P3M snapshot (P3M_SNAPSHOT, like the
 # modeling and inference blocks), not the floating "latest" channel. The
 # floating channel is not atomic while P3M syncs a new CRAN release: on
