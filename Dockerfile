@@ -785,19 +785,32 @@ RUN set -eux; \
 
 # ── sess: vscode-R 3.x's session bridge, baked from the SAME .vsix ───────────
 # vscode-R >= 3.0 talks to an R session through its bundled `sess` R package
-# (not on CRAN; r-universe has it, but at whatever version is current). At
-# every R-terminal start the extension compares the installed sess version
-# with the one in its own .vsix and, if installed < bundled, prompts "install
-# sess?" (src/util.ts promptToInstallSessPackage) — a prompt students must
-# never see. Installing from the .vsix's own sess/ directory makes the two
-# versions identical by construction. Imports (processx, later, jsonlite,
-# rstudioapi) come from P3M first so R CMD INSTALL never reaches for CRAN.
-# Installed as rstudio into site-library like every other R package here.
+# (not on CRAN). A sess that does not match the bundle makes the extension
+# prompt "install sess?" at every R-terminal start — a prompt students must
+# never see — so sess is installed from the .vsix's own copy, which matches
+# by construction. The match contract changed in 3.2.0: the extension no
+# longer compares version numbers; at attach (R/attach_sess.R) it reads the
+# bundled DESCRIPTION's `Config/vscode-R/source-revision` (a git-tree hash)
+# and accepts any sess on .libPaths() whose DESCRIPTION carries the SAME
+# field (sess_find_source_library). R CMD INSTALL preserves custom
+# DESCRIPTION fields, so the site-library copy keeps it. Otherwise it asks
+# for consent and installs into its own managed library. The smoke test
+# below enforces revision equality, not version order.
+# The source dir moved inside the .vsix in 3.2.0 (extension/sess →
+# extension/dist/resources/sess; that broke the v1.2.9 build), so it is
+# located by its DESCRIPTION rather than hard-coded. Imports (processx,
+# later, jsonlite, rstudioapi) come from P3M first so R CMD INSTALL never
+# reaches for CRAN. Installed as rstudio into site-library like every other
+# R package here.
 USER rstudio
-RUN R -q -e 'pak::pkg_install(c("processx", "later", "jsonlite", "rstudioapi"))' \
- && R CMD INSTALL /tmp/vscode-r-ext/extension/sess \
- && R --vanilla -e 'stopifnot(requireNamespace("sess", quietly = TRUE)); b <- read.dcf("/tmp/vscode-r-ext/extension/sess/DESCRIPTION", "Version")[[1]]; i <- as.character(utils::packageVersion("sess")); if (utils::compareVersion(i, b) < 0) stop("baked sess ", i, " is OLDER than the bundled ", b, " — the extension would prompt to install"); cat("SESS", i, "OK (bundled", b, ")\n")' \
- && R --vanilla -e 'stopifnot(requireNamespace("httpgd", quietly = TRUE)); cat("httpgd (r.plot.backend) OK\n")'
+RUN set -eu; \
+    sess_dir="$(dirname "$(find /tmp/vscode-r-ext/extension -path '*/sess/DESCRIPTION' | head -1)")"; \
+    test -f "$sess_dir/DESCRIPTION" || { echo "bundled sess not found in the vscode-R .vsix" >&2; exit 1; }; \
+    echo "bundled sess at $sess_dir"; \
+    R -q -e 'pak::pkg_install(c("processx", "later", "jsonlite", "rstudioapi"))'; \
+    R CMD INSTALL "$sess_dir"; \
+    SESS_DIR="$sess_dir" R --vanilla -e 'stopifnot(requireNamespace("sess", quietly = TRUE)); f <- "Config/vscode-R/source-revision"; b <- read.dcf(file.path(Sys.getenv("SESS_DIR"), "DESCRIPTION"), c("Version", f)); i <- read.dcf(system.file("DESCRIPTION", package = "sess"), c("Version", f)); if (!is.na(b[1, f]) && !identical(b[1, f], i[1, f])) stop("baked sess source-revision ", i[1, f], " != bundled ", b[1, f], " — the extension would prompt to install"); if (utils::compareVersion(i[1, "Version"], b[1, "Version"]) < 0) stop("baked sess ", i[1, "Version"], " is OLDER than the bundled ", b[1, "Version"]); cat("SESS", i[1, "Version"], "OK (bundled", b[1, "Version"], "revision", if (is.na(b[1, f])) "n/a" else b[1, f], ")\n")'; \
+    R --vanilla -e 'stopifnot(requireNamespace("httpgd", quietly = TRUE)); cat("httpgd (r.plot.backend) OK\n")'
 USER root
 RUN rm -rf /tmp/vscode-r-ext
 # ─────────────────────────────────────────────────────────────────────────────
