@@ -366,10 +366,46 @@ RUN out="$(R -q -e 'library(easystats); stopifnot(all(paste0("package:", c("effe
 
 # Headless-container workarounds: any consumer (Codespaces, local Docker,
 # JetBrains Gateway) lacks a desktop, so anything that tries to open a
-# browser fails. Stub xdg-open and set BROWSER to a no-op.
-RUN printf '#!/bin/sh\nexit 0\n' > /usr/local/bin/xdg-open \
-    && chmod +x /usr/local/bin/xdg-open
+# browser fails. BROWSER is a no-op (VS Code overrides it with its own
+# helper inside integrated terminals, which is how R's browseURL() and
+# learnr2 reach the student's browser).
+#
+# xdg-open, however, is what tools in the EXTENSION HOST use — Live Server
+# opens its tab via the `opn` npm package, which runs xdg-open on Linux —
+# and until v1.2.10 it was a stub that exited silently. Consequence
+# (codespace-starter #74/#75): "Open with Live Server" never opened a tab
+# itself; the only tab students got came from the Codespaces port-forward
+# popup, which opens the port ROOT (a directory listing), and a second
+# click, with the port already forwarded, opened nothing at all. So the
+# stub now forwards the URL to the VS Code client through the server's
+# remote `code` CLI (`code --openExternal`, which also rewrites localhost
+# URLs to the forwarded address), and stays a silent no-op when no VS Code
+# server is attached (VSCODE_IPC_HOOK_CLI unset: image build, plain docker,
+# JetBrains). The remote CLI's path contains the VS Code commit hash and
+# moves with every client update, so it is globbed at call time, newest
+# first; Codespaces mounts the server under /vscode/bin, local Dev
+# Containers under ~/.vscode-server.
+RUN cat > /usr/local/bin/xdg-open <<'EOF' && chmod +x /usr/local/bin/xdg-open
+#!/bin/sh
+# PPBDS headless devcontainer: forward URLs to the VS Code client when a
+# VS Code server is attached; otherwise do nothing. See the Dockerfile in
+# PPBDS/devcontainers (headless workarounds block).
+[ -n "${VSCODE_IPC_HOOK_CLI:-}" ] || exit 0
+[ -n "${1:-}" ] || exit 0
+# shellcheck disable=SC2012  # fixed system paths, newest server first
+cli="$(ls -dt /vscode/bin/*/bin/remote-cli/code /vscode/bin/*/*/bin/remote-cli/code \
+            "${HOME:-/home/rstudio}"/.vscode-server/bin/*/bin/remote-cli/code \
+            "${HOME:-/home/rstudio}"/.vscode-remote/bin/*/bin/remote-cli/code 2>/dev/null | head -1)"
+[ -n "$cli" ] && [ -x "$cli" ] && exec "$cli" --openExternal "$1"
+exit 0
+EOF
 ENV BROWSER=/usr/bin/true
+
+# Smoke test: with no VS Code server attached the stub is a fast, silent
+# no-op (this is the build-time and plain-docker case), and it is valid sh.
+RUN sh -n /usr/local/bin/xdg-open \
+    && out="$(xdg-open 'http://127.0.0.1:5500/analysis.html' 2>&1)" && test -z "$out" \
+    && echo "XDG-OPEN STUB (no server attached) OK"
 
 # All R installs above ran as root, so the resulting package dirs are
 # root-owned with group-read-only permissions. Restore rocker's convention
