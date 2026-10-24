@@ -377,21 +377,33 @@ RUN out="$(R -q -e 'library(easystats); stopifnot(all(paste0("package:", c("effe
 # itself; the only tab students got came from the Codespaces port-forward
 # popup, which opens the port ROOT (a directory listing), and a second
 # click, with the port already forwarded, opened nothing at all. So the
-# stub now forwards the URL to the VS Code client through the server's
-# remote `code` CLI (`code --openExternal`, which also rewrites localhost
-# URLs to the forwarded address), and stays a silent no-op when no VS Code
-# server is attached (VSCODE_IPC_HOOK_CLI unset: image build, plain docker,
-# JetBrains). The remote CLI's path contains the VS Code commit hash and
-# moves with every client update, so it is globbed at call time, newest
-# first; Codespaces mounts the server under /vscode/bin, local Dev
-# Containers under ~/.vscode-server.
+# stub now forwards the URL to the VS Code client — first through the
+# BROWSER helper the VS Code server exports into the extension host and
+# terminals (it wraps the remote `code --openExternal`, which also rewrites
+# localhost URLs to the forwarded address), then through `code` on PATH,
+# then by locating a server install (path contains the VS Code commit hash,
+# so globbed, newest first) — and stays a silent no-op when no VS Code
+# server is attached (image build, plain docker, JetBrains).
 RUN cat > /usr/local/bin/xdg-open <<'EOF' && chmod +x /usr/local/bin/xdg-open
 #!/bin/sh
 # PPBDS headless devcontainer: forward URLs to the VS Code client when a
 # VS Code server is attached; otherwise do nothing. See the Dockerfile in
 # PPBDS/devcontainers (headless workarounds block).
-[ -n "${VSCODE_IPC_HOOK_CLI:-}" ] || exit 0
 [ -n "${1:-}" ] || exit 0
+# 1. VS Code's own browser helper. The server exports BROWSER=<server>/bin/
+#    helpers/browser.sh into BOTH the extension host and integrated terminals
+#    (vscode src/vs/server/node/extensionHostConnection.ts); the image's
+#    BROWSER=/usr/bin/true is only what non-VS-Code consumers see.
+case "${BROWSER:-}" in
+  ""|/usr/bin/true|/bin/true) ;;
+  *) [ -x "$BROWSER" ] && exec "$BROWSER" "$1" ;;
+esac
+# 2. The remote `code` CLI, which the server prepends to PATH for the same
+#    two environments; it needs the IPC hook the server sets.
+[ -n "${VSCODE_IPC_HOOK_CLI:-}" ] || exit 0
+if command -v code >/dev/null 2>&1; then exec code --openExternal "$1"; fi
+# 3. Last resort: find a server install by path (contains the VS Code
+#    commit hash, so globbed; newest first).
 # shellcheck disable=SC2012  # fixed system paths, newest server first
 cli="$(ls -dt /vscode/bin/*/bin/remote-cli/code /vscode/bin/*/*/bin/remote-cli/code \
             "${HOME:-/home/rstudio}"/.vscode-server/bin/*/bin/remote-cli/code \
@@ -402,10 +414,16 @@ EOF
 ENV BROWSER=/usr/bin/true
 
 # Smoke test: with no VS Code server attached the stub is a fast, silent
-# no-op (this is the build-time and plain-docker case), and it is valid sh.
+# no-op (this is the build-time and plain-docker case); with a BROWSER
+# helper present it hands the URL to that helper, which is the attached
+# VS Code case in miniature. Also checks it is valid sh.
 RUN sh -n /usr/local/bin/xdg-open \
     && out="$(xdg-open 'http://127.0.0.1:5500/analysis.html' 2>&1)" && test -z "$out" \
-    && echo "XDG-OPEN STUB (no server attached) OK"
+    && printf '#!/bin/sh\necho "helper got: $1"\n' > /tmp/fake-browser.sh && chmod +x /tmp/fake-browser.sh \
+    && out="$(BROWSER=/tmp/fake-browser.sh xdg-open 'http://127.0.0.1:5500/analysis.html' 2>&1)" \
+    && test "$out" = "helper got: http://127.0.0.1:5500/analysis.html" \
+    && rm -f /tmp/fake-browser.sh \
+    && echo "XDG-OPEN STUB (no-op without a server; forwards to BROWSER helper) OK"
 
 # All R installs above ran as root, so the resulting package dirs are
 # root-owned with group-read-only permissions. Restore rocker's convention
