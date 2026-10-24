@@ -50,7 +50,7 @@ ARG QUARTO_VERSION=1.10.19
 # v1.1.6, which is how v1.1.5 silently picked up a gh whose `auth login`
 # tried to use the clipboard (the "No clipboard utilities available" warning
 # connect-repo now suppresses with --clipboard=false).
-ARG GH_VERSION=2.102.0
+ARG GH_VERSION=2.103.2
 # (arf was wrongly suspected of the 2026-08 Rplots.pdf regression and briefly
 # rolled back to 0.3.4 on a branch; exonerated by a version matrix — the real
 # culprit is R 4.6's startup no longer calling a globalenv .First.sys
@@ -62,9 +62,9 @@ ARG NODE_MAJOR=24
 # doesn't silently drift behind the registry. Bump deliberately, like
 # Quarto/arf. (Antigravity CLI is the exception — its installer offers no
 # version pin, so `agy` floats; see the agy install block below.)
-ARG CLAUDE_CODE_VERSION=2.1.302
-ARG CODEX_VERSION=0.163.0
-ARG GROK_VERSION=1.0.62
+ARG CLAUDE_CODE_VERSION=2.1.310
+ARG CODEX_VERSION=0.164.0
+ARG GROK_VERSION=1.0.70
 # aider is pip-distributed; pinned like the npm CLIs (it floated unpinned
 # until v1.0.8 — the one exception with a pin mechanism available).
 ARG AIDER_VERSION=0.86.2
@@ -87,8 +87,8 @@ ARG AIDER_VERSION=0.86.2
 #    list.
 ARG RT_EXT_VERSION=1.3.0
 ARG VSCODE_R_VERSION=3.2.0
-ARG R_SYNTAX_EXT_VERSION=0.1.4
-ARG QUARTO_EXT_VERSION=1.138.0
+ARG R_SYNTAX_EXT_VERSION=0.1.5
+ARG QUARTO_EXT_VERSION=1.139.0
 ARG LIVESERVER_EXT_VERSION=5.7.10
 ARG PDF_EXT_VERSION=1.2.2
 ARG RAINBOW_CSV_EXT_VERSION=3.24.1
@@ -541,7 +541,7 @@ RUN R -q -e 'pak::pkg_install(c("devtools", "pkgdown", "roxygen2", "testthat", "
 # version has had no commits beyond CRAN 0.11.6 since 2025-11.) The knob
 # only has to CHANGE: a second refresh on the same day takes a suffix
 # (2026-10-07-2) — repeating the date would be a cache hit (v1.2.1).
-ARG COURSE_PKG_REFRESH=2026-10-17
+ARG COURSE_PKG_REFRESH=2026-10-24
 # Dependencies come from the DATED P3M snapshot (P3M_SNAPSHOT, like the
 # modeling and inference blocks), not the floating "latest" channel. The
 # floating channel is not atomic while P3M syncs a new CRAN release: on
@@ -679,7 +679,7 @@ USER root
 # We still set RETICULATE_PYTHON so that IF someone installs R's reticulate
 # (not baked in) it bridges to this same venv rather than a separate Python.
 # uv's own binary is copied from its official pinned image (pinned, unlike agy).
-COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.13.5 /uv /usr/local/bin/uv
 COPY requirements.lock /tmp/requirements.lock
 COPY requirements.txt /tmp/requirements.txt
 
