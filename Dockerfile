@@ -390,25 +390,41 @@ RUN cat > /usr/local/bin/xdg-open <<'EOF' && chmod +x /usr/local/bin/xdg-open
 # VS Code server is attached; otherwise do nothing. See the Dockerfile in
 # PPBDS/devcontainers (headless workarounds block).
 [ -n "${1:-}" ] || exit 0
+url="$1"
+# 0. Codespaces: build the forwarded address ourselves. VS Code's helper is
+#    supposed to rewrite http://127.0.0.1:PORT/... to the forwarded
+#    https://<codespace>-PORT.<domain>/... on the way to the client, and it
+#    does for opens from a terminal, but an open that originates in the
+#    extension host (Live Server) silently opens nothing — verified in a
+#    live Codespace 2026-10-24: a public URL opened a tab, the localhost
+#    form did not, the forwarded form did. The two variables are set in
+#    every Codespace container; outside Codespaces the URL passes through.
+if [ -n "${CODESPACE_NAME:-}" ] && [ -n "${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN:-}" ]; then
+  case "$url" in
+    http://127.0.0.1:*|http://localhost:*|http://0.0.0.0:*)
+      rest="${url#http://*:}"; port="${rest%%/*}"; port="${port%%\?*}"; path="${rest#"$port"}"
+      case "$port" in ""|*[!0-9]*) ;; *) url="https://${CODESPACE_NAME}-${port}.${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}${path}" ;; esac ;;
+  esac
+fi
 # 1. VS Code's own browser helper. The server exports BROWSER=<server>/bin/
 #    helpers/browser.sh into BOTH the extension host and integrated terminals
 #    (vscode src/vs/server/node/extensionHostConnection.ts); the image's
 #    BROWSER=/usr/bin/true is only what non-VS-Code consumers see.
 case "${BROWSER:-}" in
   ""|/usr/bin/true|/bin/true) ;;
-  *) [ -x "$BROWSER" ] && exec "$BROWSER" "$1" ;;
+  *) [ -x "$BROWSER" ] && exec "$BROWSER" "$url" ;;
 esac
 # 2. The remote `code` CLI, which the server prepends to PATH for the same
 #    two environments; it needs the IPC hook the server sets.
 [ -n "${VSCODE_IPC_HOOK_CLI:-}" ] || exit 0
-if command -v code >/dev/null 2>&1; then exec code --openExternal "$1"; fi
+if command -v code >/dev/null 2>&1; then exec code --openExternal "$url"; fi
 # 3. Last resort: find a server install by path (contains the VS Code
 #    commit hash, so globbed; newest first).
 # shellcheck disable=SC2012  # fixed system paths, newest server first
 cli="$(ls -dt /vscode/bin/*/bin/remote-cli/code /vscode/bin/*/*/bin/remote-cli/code \
             "${HOME:-/home/rstudio}"/.vscode-server/bin/*/bin/remote-cli/code \
             "${HOME:-/home/rstudio}"/.vscode-remote/bin/*/bin/remote-cli/code 2>/dev/null | head -1)"
-[ -n "$cli" ] && [ -x "$cli" ] && exec "$cli" --openExternal "$1"
+[ -n "$cli" ] && [ -x "$cli" ] && exec "$cli" --openExternal "$url"
 exit 0
 EOF
 ENV BROWSER=/usr/bin/true
@@ -422,8 +438,12 @@ RUN sh -n /usr/local/bin/xdg-open \
     && printf '#!/bin/sh\necho "helper got: $1"\n' > /tmp/fake-browser.sh && chmod +x /tmp/fake-browser.sh \
     && out="$(BROWSER=/tmp/fake-browser.sh xdg-open 'http://127.0.0.1:5500/analysis.html' 2>&1)" \
     && test "$out" = "helper got: http://127.0.0.1:5500/analysis.html" \
+    && out="$(BROWSER=/tmp/fake-browser.sh CODESPACE_NAME=my-space GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN=app.github.dev xdg-open 'http://127.0.0.1:5500/analysis.html' 2>&1)" \
+    && test "$out" = "helper got: https://my-space-5500.app.github.dev/analysis.html" \
+    && out="$(BROWSER=/tmp/fake-browser.sh CODESPACE_NAME=my-space GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN=app.github.dev xdg-open 'https://example.org/x' 2>&1)" \
+    && test "$out" = "helper got: https://example.org/x" \
     && rm -f /tmp/fake-browser.sh \
-    && echo "XDG-OPEN STUB (no-op without a server; forwards to BROWSER helper) OK"
+    && echo "XDG-OPEN STUB (no-op without a server; forwards to BROWSER helper; Codespaces localhost rewrite) OK"
 
 # All R installs above ran as root, so the resulting package dirs are
 # root-owned with group-read-only permissions. Restore rocker's convention
