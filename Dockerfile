@@ -366,10 +366,64 @@ RUN out="$(R -q -e 'library(easystats); stopifnot(all(paste0("package:", c("effe
 
 # Headless-container workarounds: any consumer (Codespaces, local Docker,
 # JetBrains Gateway) lacks a desktop, so anything that tries to open a
-# browser fails. Stub xdg-open and set BROWSER to a no-op.
-RUN printf '#!/bin/sh\nexit 0\n' > /usr/local/bin/xdg-open \
-    && chmod +x /usr/local/bin/xdg-open
+# browser fails. BROWSER is a no-op (VS Code overrides it with its own
+# helper inside integrated terminals, which is how R's browseURL() and
+# learnr2 reach the student's browser).
+#
+# xdg-open, however, is what tools in the EXTENSION HOST use — Live Server
+# opens its tab via the `opn` npm package, which runs xdg-open on Linux —
+# and until v1.2.10 it was a stub that exited silently. Consequence
+# (codespace-starter #74/#75): "Open with Live Server" never opened a tab
+# itself; the only tab students got came from the Codespaces port-forward
+# popup, which opens the port ROOT (a directory listing), and a second
+# click, with the port already forwarded, opened nothing at all. So the
+# stub now forwards the URL to the VS Code client — first through the
+# BROWSER helper the VS Code server exports into the extension host and
+# terminals (it wraps the remote `code --openExternal`, which also rewrites
+# localhost URLs to the forwarded address), then through `code` on PATH,
+# then by locating a server install (path contains the VS Code commit hash,
+# so globbed, newest first) — and stays a silent no-op when no VS Code
+# server is attached (image build, plain docker, JetBrains).
+RUN cat > /usr/local/bin/xdg-open <<'EOF' && chmod +x /usr/local/bin/xdg-open
+#!/bin/sh
+# PPBDS headless devcontainer: forward URLs to the VS Code client when a
+# VS Code server is attached; otherwise do nothing. See the Dockerfile in
+# PPBDS/devcontainers (headless workarounds block).
+[ -n "${1:-}" ] || exit 0
+# 1. VS Code's own browser helper. The server exports BROWSER=<server>/bin/
+#    helpers/browser.sh into BOTH the extension host and integrated terminals
+#    (vscode src/vs/server/node/extensionHostConnection.ts); the image's
+#    BROWSER=/usr/bin/true is only what non-VS-Code consumers see.
+case "${BROWSER:-}" in
+  ""|/usr/bin/true|/bin/true) ;;
+  *) [ -x "$BROWSER" ] && exec "$BROWSER" "$1" ;;
+esac
+# 2. The remote `code` CLI, which the server prepends to PATH for the same
+#    two environments; it needs the IPC hook the server sets.
+[ -n "${VSCODE_IPC_HOOK_CLI:-}" ] || exit 0
+if command -v code >/dev/null 2>&1; then exec code --openExternal "$1"; fi
+# 3. Last resort: find a server install by path (contains the VS Code
+#    commit hash, so globbed; newest first).
+# shellcheck disable=SC2012  # fixed system paths, newest server first
+cli="$(ls -dt /vscode/bin/*/bin/remote-cli/code /vscode/bin/*/*/bin/remote-cli/code \
+            "${HOME:-/home/rstudio}"/.vscode-server/bin/*/bin/remote-cli/code \
+            "${HOME:-/home/rstudio}"/.vscode-remote/bin/*/bin/remote-cli/code 2>/dev/null | head -1)"
+[ -n "$cli" ] && [ -x "$cli" ] && exec "$cli" --openExternal "$1"
+exit 0
+EOF
 ENV BROWSER=/usr/bin/true
+
+# Smoke test: with no VS Code server attached the stub is a fast, silent
+# no-op (this is the build-time and plain-docker case); with a BROWSER
+# helper present it hands the URL to that helper, which is the attached
+# VS Code case in miniature. Also checks it is valid sh.
+RUN sh -n /usr/local/bin/xdg-open \
+    && out="$(xdg-open 'http://127.0.0.1:5500/analysis.html' 2>&1)" && test -z "$out" \
+    && printf '#!/bin/sh\necho "helper got: $1"\n' > /tmp/fake-browser.sh && chmod +x /tmp/fake-browser.sh \
+    && out="$(BROWSER=/tmp/fake-browser.sh xdg-open 'http://127.0.0.1:5500/analysis.html' 2>&1)" \
+    && test "$out" = "helper got: http://127.0.0.1:5500/analysis.html" \
+    && rm -f /tmp/fake-browser.sh \
+    && echo "XDG-OPEN STUB (no-op without a server; forwards to BROWSER helper) OK"
 
 # All R installs above ran as root, so the resulting package dirs are
 # root-owned with group-read-only permissions. Restore rocker's convention
