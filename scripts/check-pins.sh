@@ -56,9 +56,13 @@ row "grok"          "$(arg GROK_VERSION)"        "$(npm_latest @xai-official/gro
 row "aider"         "$(arg AIDER_VERSION)"       "$(pypi_latest aider-chat)"
 row "observable framework" "$(grep -oE '@observablehq/framework@[0-9.]+' "$dockerfile" | cut -d@ -f3)" "$(npm_latest @observablehq/framework)"
 
-echo "== VS Code extensions (Open VSX; vscode-R pre-releases are NOT followed)"
+echo "== VS Code extensions (Open VSX; vscode-R against its newest STABLE GitHub release)"
 row "PPBDS.vscode-r-tutorials" "$(arg RT_EXT_VERSION)"          "$(ovsx_latest PPBDS/vscode-r-tutorials)"
-row "REditorSupport.r"         "$(arg VSCODE_R_VERSION)"        "$(ovsx_latest REditorSupport/r)"
+# vscode-R: compare against the newest STABLE release (GitHub releases with
+# prerelease=false), not Open VSX's newest version, which is the dated 3.x
+# pre-release channel we deliberately skip — that is how stable 3.2.1 went
+# unnoticed on 2026-10-24 while the report kept showing a skipped 3.3.x.
+row "REditorSupport.r (stable)" "$(arg VSCODE_R_VERSION)" "$(gh api repos/REditorSupport/vscode-R/releases --jq '[.[] | select(.prerelease==false)][0].tag_name' 2>/dev/null | sed 's/^v//' || echo '?')"
 row "REditorSupport.r-syntax"  "$(arg R_SYNTAX_EXT_VERSION)"    "$(ovsx_latest REditorSupport/r-syntax)"
 row "quarto.quarto"            "$(arg QUARTO_EXT_VERSION)"      "$(ovsx_latest quarto/quarto)"
 row "ritwickdey.LiveServer"    "$(arg LIVESERVER_EXT_VERSION)"  "$(ovsx_latest ritwickdey/LiveServer)"
