@@ -86,7 +86,7 @@ ARG AIDER_VERSION=0.86.2
 #  - quarto, Live Server, PDF viewer, Rainbow CSV: the rest of the launcher's
 #    list.
 ARG RT_EXT_VERSION=1.3.0
-ARG VSCODE_R_VERSION=3.2.1
+ARG VSCODE_R_VERSION=3.2.0
 ARG R_SYNTAX_EXT_VERSION=0.1.5
 ARG QUARTO_EXT_VERSION=1.139.0
 ARG LIVESERVER_EXT_VERSION=5.7.10
@@ -831,6 +831,25 @@ RUN npm install -g @observablehq/framework@1.13.4 && observable --version
 # (top of file), release. For the others: bump the ARG, release, and bump the
 # matching pin in codespace-starter's extensions list in the same cycle.
 # The vscode-R .vsix is kept at /tmp/vscode-r-ext for the sess bake below.
+#
+# PINNED against auto-update (since v1.3.4). A baked extension directory
+# alone leaves VS Code free to auto-update it after attach — which is how
+# vscode-R 3.2.1 replaced the baked 3.2.0 in every fresh Codespace on
+# 2026-10-24/25 (first prompting "installed sess does not match", then, once
+# 1.3.3 baked 3.2.1, exposing 3.2.1's own broken plot/help viewers: its ejs 7
+# bump compiled every template render to `(void 0)(…)`). The launcher's
+# `reditorsupport.r@3.2.0` pin does NOT prevent that: it only picks what to
+# install at create, and nothing installs because the dir is already there.
+# `extensions.autoUpdate` is application-scoped, so unsettable from the
+# launcher (same class as Workspace Trust). What VS Code does honour is the
+# per-extension `pinned` flag in the extensions directory's metadata file,
+# `extensions.json` (an installed-extension record per entry; auto-update
+# skips pinned ones — vscode extensionsWorkbenchService.ts). So the loop
+# writes that file for all seven baked extensions, with the Marketplace
+# uuid/publisher ids VS Code would have recorded itself (table below; the
+# file shape was copied from a live Codespace), and pinned: true. Updating
+# an extension is therefore ALWAYS an image release: bump the ARG here and,
+# for vscode-R, the launcher pin. Keep the case table in step with the loop.
 RUN set -eux; \
     for spec in \
         "PPBDS/vscode-r-tutorials/${RT_EXT_VERSION}" \
@@ -851,10 +870,39 @@ RUN set -eux; \
         python3 -c "import json, sys; v = json.load(open('$dest/package.json'))['version']; sys.exit(0 if v == '$ver' else ('unexpected version for $pub.$name: ' + v))"; \
         if [ "$pub.$name" = "REditorSupport.r" ]; then rm -rf /tmp/vscode-r-ext; mv /tmp/ext /tmp/vscode-r-ext; fi; \
         rm -rf /tmp/ext.vsix /tmp/ext; \
+        case "$pub.$name" in \
+            REditorSupport.r)         g="4dfff9f4-ff9b-47bb-b0d1-c54e18d8febb|e361ca93-f309-41ab-9a77-8a4a9c10c6d1|REditorSupport" ;; \
+            REditorSupport.r-syntax)  g="69e0a24d-f5ef-485f-bca2-4dbef825005d|e361ca93-f309-41ab-9a77-8a4a9c10c6d1|REditorSupport" ;; \
+            quarto.quarto)            g="a1be81fc-0f3a-4f2e-92ee-3fdc7ab96c73|b21355c9-18d2-46e4-95da-d2d98de81e96|Quarto" ;; \
+            ritwickdey.LiveServer)    g="46cc5bbd-b098-4568-9b87-f91e07d26f2d|17fd9a78-e430-4a78-add2-ade4a8830352|Ritwick Dey" ;; \
+            tomoki1207.pdf)           g="6db08635-0c6a-45ba-9a4b-8c3e192c63c2|36dae390-559e-4374-bca8-a49ec1616c36|tomoki1207" ;; \
+            mechatroner.rainbow-csv)  g="3792588c-3d35-442d-91ea-fe6a755e8155|0d5438b6-325a-4f88-aa28-6192aa2cf2a6|mechatroner" ;; \
+            PPBDS.vscode-r-tutorials) g="959ecd0d-2a3a-44e1-9d05-57daaadf7d11|00290cd8-4697-4abc-848c-6e398a7682e9|Preceptor's Primer for Bayesian Data Science" ;; \
+            *) echo "no gallery ids for $pub.$name — add them to the case table" >&2; exit 1 ;; \
+        esac; \
+        EXT_ID="$(printf '%s.%s' "$pub" "$name" | tr '[:upper:]' '[:lower:]')" EXT_VER="$ver" EXT_DIR="$(basename "$dest")" EXT_G="$g" \
+        python3 -c 'import json, os; u, pid, pname = os.environ["EXT_G"].split("|"); d = os.environ["EXT_DIR"]; print(json.dumps({"identifier": {"id": os.environ["EXT_ID"], "uuid": u}, "version": os.environ["EXT_VER"], "location": {"$mid": 1, "path": "/home/rstudio/.vscode-remote/extensions/" + d, "scheme": "file"}, "relativeLocation": d, "metadata": {"id": u, "publisherDisplayName": pname, "publisherId": pid, "isPreReleaseVersion": False, "pinned": True}}))' >> /tmp/ext-entries.jsonl; \
         echo "EXTENSION $pub.$name $ver OK"; \
     done; \
+    python3 -c 'import json; e = [json.loads(l) for l in open("/tmp/ext-entries.jsonl")]; json.dump(e, open("/home/rstudio/.vscode-remote/extensions/extensions.json", "w"), indent=2)'; \
+    rm -f /tmp/ext-entries.jsonl; \
     chown -R rstudio:rstudio /home/rstudio/.vscode-remote; \
     ls /home/rstudio/.vscode-remote/extensions
+
+# Smoke test: the pinned-metadata file lists every baked extension, each
+# pinned, each pointing at a directory that exists. (See the PINNED block
+# in the comment above for why this file exists.)
+RUN python3 - <<'PYSMOKE'
+import json, os
+entries = json.load(open("/home/rstudio/.vscode-remote/extensions/extensions.json"))
+assert len(entries) == 7, f"expected 7 baked extensions, found {len(entries)}"
+for e in entries:
+    assert os.path.isdir(e["location"]["path"]), e["location"]["path"]
+    assert e["relativeLocation"] == os.path.basename(e["location"]["path"]), e["relativeLocation"]
+    assert e["metadata"]["pinned"] is True, e["identifier"]["id"] + " is not pinned"
+    assert e["identifier"]["id"] == e["identifier"]["id"].lower(), e["identifier"]["id"]
+print("EXTENSIONS.JSON OK:", ", ".join(e["identifier"]["id"] + "@" + e["version"] + " pinned" for e in entries))
+PYSMOKE
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── sess: vscode-R 3.x's session bridge, baked from the SAME .vsix ───────────
