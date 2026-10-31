@@ -86,7 +86,7 @@ ARG AIDER_VERSION=0.86.2
 #  - quarto, Live Server, PDF viewer, Rainbow CSV: the rest of the launcher's
 #    list.
 ARG RT_EXT_VERSION=1.3.0
-ARG VSCODE_R_VERSION=3.2.0
+ARG VSCODE_R_VERSION=3.2.2
 ARG R_SYNTAX_EXT_VERSION=0.1.5
 ARG QUARTO_EXT_VERSION=1.139.0
 ARG LIVESERVER_EXT_VERSION=5.7.10
@@ -818,8 +818,8 @@ RUN npm install -g @observablehq/framework@1.13.4 && observable --version
 #    every launch, a ~30 s window where the Activity Bar is incomplete and an
 #    R terminal does not exist yet while the banner already says READY, and
 #    (for ours) a Marketplace that we don't publish to. Open VSX has all of
-#    them. codespace-starter keeps its `extensions` list as well, pinned to
-#    the same versions: VS Code sees them installed and skips the install.
+#    them. codespace-starter keeps its `extensions` list as well (vscode-R
+#    with its version): VS Code sees them installed and skips the install.
 #  - Why not a vsix install at attach time (tried, in welcome.sh): an
 #    extension installed into an already-running window doesn't surface its
 #    Activity Bar icon until the window reloads — bad first-run UX.
@@ -850,6 +850,8 @@ RUN npm install -g @observablehq/framework@1.13.4 && observable --version
 # file shape was copied from a live Codespace), and pinned: true. Updating
 # an extension is therefore ALWAYS an image release: bump the ARG here and,
 # for vscode-R, the launcher pin. Keep the case table in step with the loop.
+# vscode-R 3.2.2 (2026-10-26, baked since v1.3.5) restored the viewers
+# (REditorSupport/vscode-R#1910, commit b070c28); the 3.2.0 hold is over.
 RUN set -eux; \
     for spec in \
         "PPBDS/vscode-r-tutorials/${RT_EXT_VERSION}" \
