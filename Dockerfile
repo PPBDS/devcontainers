@@ -818,8 +818,13 @@ RUN npm install -g @observablehq/framework@1.13.4 && observable --version
 #    every launch, a ~30 s window where the Activity Bar is incomplete and an
 #    R terminal does not exist yet while the banner already says READY, and
 #    (for ours) a Marketplace that we don't publish to. Open VSX has all of
-#    them. codespace-starter keeps its `extensions` list as well (vscode-R
-#    with its version): VS Code sees them installed and skips the install.
+#    them EXCEPT, reliably, vscode-R: its stable 3.2.2 (2026-10-26) was still
+#    absent from Open VSX on 2026-10-31 (3.2.1 and the 3.3.x pre-releases
+#    were there), which 404'd the v1.3.5 validation build. vscode-R is
+#    therefore fetched from its GitHub release asset (r-<ver>.vsix, attached
+#    to every release), the project's primary artifact. codespace-starter
+#    keeps its `extensions` list as well (vscode-R with its version): VS Code
+#    sees them installed and skips the install.
 #  - Why not a vsix install at attach time (tried, in welcome.sh): an
 #    extension installed into an already-running window doesn't surface its
 #    Activity Bar icon until the window reloads — bad first-run UX.
@@ -864,6 +869,7 @@ RUN set -eux; \
     do \
         pub="${spec%%/*}"; rest="${spec#*/}"; name="${rest%%/*}"; ver="${rest#*/}"; \
         url="https://open-vsx.org/api/${pub}/${name}/${ver}/file/${pub}.${name}-${ver}.vsix"; \
+        if [ "$pub.$name" = "REditorSupport.r" ]; then url="https://github.com/REditorSupport/vscode-R/releases/download/v${ver}/r-${ver}.vsix"; fi; \
         dest="/home/rstudio/.vscode-remote/extensions/$(printf '%s.%s-%s' "$pub" "$name" "$ver" | tr '[:upper:]' '[:lower:]')"; \
         curl -fsSL -o /tmp/ext.vsix "$url"; \
         rm -rf /tmp/ext; python3 -m zipfile -e /tmp/ext.vsix /tmp/ext; \
