@@ -82,13 +82,13 @@ for r in PPBDS/learnr2 PPBDS/vscode.tutorials PPBDS/misc.tutorials PPBDS/ims.tut
   printf '  %-34s %s new commit(s), last %s\n' "$r" "$n" "$last"
 done
 
-echo "== Consumer pins (the FIVE places; all must equal the latest release tag)"
+# TWO places since 2026-10-31: the tutorial repos' student-env-render CI jobs
+# read the tag from codespace-starter's devcontainer.json at run time, so
+# they can never lag and are not listed here.
+echo "== Consumer pins (the TWO places; both must equal the latest release tag)"
 latest_tag="$(gh_latest PPBDS/devcontainers)"
 pin_of() { gh api "repos/$1/contents/$2" --jq .content 2>/dev/null | base64 -d | grep -oE 'ghcr\.io/ppbds/devcontainer:[0-9][0-9.]*' | head -1 | cut -d: -f2 || echo '?'; }
 row "PPBDS/codespace-starter"  "$(pin_of PPBDS/codespace-starter .devcontainer/devcontainer.json)" "$latest_tag"
-for r in misc.tutorials vscode.tutorials ims.tutorials; do
-  row "PPBDS/$r (CI)" "$(pin_of PPBDS/$r .github/workflows/R-CMD-check.yaml)" "$latest_tag"
-done
 row "PPBDS/primer"             "$(pin_of PPBDS/primer .devcontainer/devcontainer.json)" "$latest_tag"
 
 echo "== Lockstep: launcher's vscode-R pin must equal VSCODE_R_VERSION"
